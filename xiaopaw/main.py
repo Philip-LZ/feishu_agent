@@ -23,6 +23,7 @@ from lark_oapi.client import Client, LogLevel
 from xiaopaw.agents.main_crew import build_agent_fn
 from xiaopaw.cleanup.service import CleanupService
 from xiaopaw.cron.service import CronService
+from xiaopaw.env import load_dotenv
 from xiaopaw.feishu.downloader import FeishuDownloader
 from xiaopaw.feishu.listener import FeishuListener, run_forever
 from xiaopaw.feishu.sender import FeishuSender
@@ -65,6 +66,7 @@ async def _daily_cleanup_loop(cleanup_svc: CleanupService) -> None:
 
 async def async_main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
+    load_dotenv(repo_root / ".env")
     config_path = repo_root / "config.yaml"
     cfg = _load_config(config_path)
 

@@ -21,3 +21,4 @@ config.yaml
 # Env
 .env
 .env.*
+!.env.example

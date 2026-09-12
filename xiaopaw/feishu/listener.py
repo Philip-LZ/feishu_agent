@@ -49,7 +49,7 @@ class _XiaoPawEventHandler(EventDispatcherHandler):
             return True
         return chat_id in self._allowed_chats
 
-    def do_without_validation(self, payload: bytes) -> None:  # type: ignore[override]
+    def _do_without_validation(self, payload: bytes) -> None:  # type: ignore[override]
         try:
             data = json.loads(payload.decode("utf-8"))
         except Exception:

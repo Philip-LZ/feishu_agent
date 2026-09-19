@@ -107,6 +107,51 @@ python ./scripts/search.py \
 
 ---
 
+## 保存结果文件（CRITICAL）
+
+**必须使用 shell 重定向保存结果，禁止使用 `file_operations write` 写入 JSON 内容。**
+
+原因：`file_operations write` 要求 `content` 字段为字符串，但 LLM 传入 JSON 对象会导致 Pydantic 类型校验失败并反复重试。
+
+### 正确做法：一步完成搜索 + 保存
+
+```bash
+python {skill_base}/scripts/search.py --query "搜索词" --top_k 10 > {session_dir}/outputs/search_result.json
+```
+
+这样 stdout JSON 直接写入文件，无需再调用 `file_operations`。
+
+### 验证文件已写入
+
+```bash
+cat {session_dir}/outputs/search_result.json | head -5
+```
+
+---
+
+## MCP 工具调用注意事项
+
+你将通过 MCP 工具在沙箱中执行命令。以下是正确的参数格式：
+
+### 参数类型规范
+
+| 参数类型 | 正确写法 | 错误写法（会导致执行失败） |
+|---------|---------|------------------------|
+| 空值 | 省略该参数，或传 `null` | `"None"`, `"null"`, `""` |
+| 布尔值 | `true` / `false` | `"True"`, `"False"`, `"true"`, `1`, `0` |
+| 数字 | `10` | `"10"` |
+| 文件路径 | `/workspace/sessions/{session_id}/outputs/result.json` | `./outputs/result.json`, `result.json` |
+
+### 常见错误示例
+
+❌ 错误：`{"command": "python search.py", "timeout": "None", "cwd": "None"}`
+✅ 正确：`{"command": "python search.py"}`（不需要的参数直接省略）
+
+❌ 错误：`{"command": "cat file.txt", "cwd": "./scripts"}`
+✅ 正确：`{"command": "cat file.txt", "cwd": "/mnt/skills/baidu_search/scripts"}`（使用绝对路径）
+
+---
+
 ## 注意事项
 
 1. **不要手动处理认证**：API Key 由系统注入 `/workspace/.config/baidu.json`，脚本自动读取

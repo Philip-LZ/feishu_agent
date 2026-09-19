@@ -1,33 +1,36 @@
-"""Sub-Crew 工厂 — XiaoPaw 任务型 Skill 执行层
+"""Sub-Crew —— Skill 在沙箱中的执行单元（L29 零编排协作）。
 
-💡【第03课·上下文隔离】Sub-Crew 是 XiaoPaw 实现 Multi-Agent 上下文隔离的核心机制：
-   - 主 Crew 的历史对话不传入 Sub-Crew（Sub-Crew 只看到当前任务指令）
-   - Sub-Crew 的执行过程不污染主 Crew（主 Crew 只看到 Sub-Crew 的摘要输出）
-   - 这就是课程中"Agent 的数字化职能部门"理念的工程实现：
-     主 Agent = PMO（项目管理），Sub-Agent = 各职能部门执行具体工作
+【课程对应】
+- L17：SkillLoaderTool 渐进式能力披露（Main Crew 不知道 Skill 实现细节）
+- L29《零编排架构》：Sub-Crew 在 ThreadPoolExecutor 子线程里运行
+- L33《项目实战 5》机制二：sub-crew trace 自动挂父节点 —— 关键就在这里
 
-💡【第14课·MCP 协议】Sub-Crew 通过 MCPServerHTTP 接入 AIO-Sandbox，
-   开放全部 MCP 工具（无白名单过滤）
+【为什么是"零编排"】
+传统 Agent 框架要求显式声明 Workflow（A → B → C）。
+零编排：每个 Skill 自带 SKILL.md 描述自己（agent role + task）；
+Main Crew 调 SkillLoader → SkillLoader 读 SKILL.md → 临时构造 Sub-Crew → 执行 → 返回结果。
+没有任何中央编排者，能力是"声明"出来的而不是"编排"出来的。
 
-每次 SkillLoaderTool 触发任务型 Skill 时，调用 build_skill_crew() 构建
-一个全新的 Sub-Crew 实例，在 AIO-Sandbox 中执行 Skill 逻辑。
-
-设计要点：
-- 每次调用返回新实例，防止 CrewAI 内部状态污染
-- Sub-Crew 不注入 step_callback（verbose 只推主 Agent 的推理，避免话题噪音）
-- session 工作目录和用户 routing_key 通过 SkillLoaderTool 的 sandbox_execution_directive 注入，不经过主 LLM
-- 💡【第07课·人设工程】Agent 的 role/goal/backstory 从 agents.yaml 加载，
-  运行时占位符（skill_name/session_dir/skill_instructions）由 _format_cfg() 替换——
-  与主 Crew 保持一致的 YAML+Python 分离惯例
+【与 Hook 框架的协同】
+Sub-Crew 在子线程跑，但 ContextVar（adapter / trace_id / span 栈）由 copy_context() 自动继承。
+所以 Sub-Crew 的 LLM/工具调用会自动挂在父线程"tool-skill_xxx" span 之下，无需显式传 parent_id。
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
+from typing import Any, Awaitable, Callable
 
 import yaml
 from crewai import Agent, Crew, Process, Task
+from crewai.hooks import ToolCallHookContext, before_tool_call, unregister_before_tool_call_hook
+# 必须用 MCPServerHTTP（Streamable HTTP），不是 MCPServerSSE。
+# AIO-Sandbox 的 /mcp 端点是 Streamable HTTP（POST + 可选 SSE 升级）。
+# 用 MCPServerSSE 会发 GET /mcp 期望持续事件流，sandbox 几秒后关连接，
+# CrewAI MCP 适配器卡在 _resolve_native 等 tools/list 响应 → 测试 5min 超时。
+# 症状参考 README → "常见坑 FAQ" 第 2 条。
 from crewai.mcp import MCPServerHTTP
 
 from xiaopaw.llm.aliyun_llm import AliyunLLM
@@ -35,20 +38,61 @@ from xiaopaw.llm.aliyun_llm import AliyunLLM
 logger = logging.getLogger(__name__)
 
 _CONFIG_DIR = Path(__file__).parent / "config"
+_DEFAULT_SANDBOX_MCP_URL = "http://localhost:8030/mcp"
 
-# ── AIO-Sandbox MCP 配置 ────────────────────────────────────────────────────
-
-# 默认端口：sandbox-docker-compose.yaml 映射 8022:8080
-_DEFAULT_SANDBOX_MCP_URL = "http://localhost:8022/mcp"
+_STRING_CONTENT_FIELDS = {"content", "file_text", "new_str"}
 
 
-def _load_yaml(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+def _normalize_subcrew_tool_input(tool_input: dict) -> None:
+    """Convert dict values to JSON strings for MCP file-write tools.
+
+    The sub-crew LLM sometimes passes a dict where a string is expected
+    (e.g. file_operations content, str_replace_editor file_text). Pydantic
+    rejects non-string values → repeated retries burn the time budget.
+    """
+    for field in _STRING_CONTENT_FIELDS:
+        val = tool_input.get(field)
+        if isinstance(val, (dict, list)):
+            tool_input[field] = json.dumps(val, ensure_ascii=False)
 
 
 def _format_cfg(cfg: dict, **kwargs) -> dict:
-    """对配置字典中的字符串值做 Python format 替换，非字符串值原样保留。"""
-    return {k: v.format(**kwargs) if isinstance(v, str) else v for k, v in cfg.items()}
+    result = {}
+    for k, v in cfg.items():
+        if isinstance(v, str):
+            result[k] = v.format(**kwargs)
+        else:
+            result[k] = v
+    return result
+
+
+def _make_subcrew_step_callback() -> Callable[[Any], Awaitable[None]]:
+    """Step callback for sub-crew: fires AFTER_TOOL_CALL + AFTER_TURN events.
+
+    Unlike the main crew's step_callback, this omits sender.send_thinking
+    since the sub-crew has no direct channel to the user.
+    """
+    from crewai.agents.parser import AgentAction, AgentFinish
+    from xiaopaw.hook_framework.crew_adapter import get_current_adapter
+
+    async def _callback(step_output: Any) -> None:
+        adapter = get_current_adapter()
+        if not adapter:
+            return
+
+        step_text = ""
+        if isinstance(step_output, AgentAction):
+            step_text = str(step_output.text or step_output.thought or "")
+        elif isinstance(step_output, AgentFinish):
+            step_text = str(getattr(step_output, "output", "") or "")
+        adapter.dispatch_after_turn(output=step_text[:2000])
+
+        if adapter._pending_deny:
+            pending = adapter._pending_deny
+            adapter._pending_deny = None
+            raise pending
+
+    return _callback
 
 
 def build_skill_crew(
@@ -56,80 +100,55 @@ def build_skill_crew(
     skill_instructions: str,
     session_id: str = "",
     sandbox_mcp_url: str = _DEFAULT_SANDBOX_MCP_URL,
-    sub_agent_model: str = "qwen3.6-max-preview",
+    sub_agent_model: str = "qwen3-max",
     max_iter: int = 20,
+    allowed_tools: list[str] | None = None,
 ) -> Crew:
-    """
-    Sub-Crew 工厂：为指定 Skill 构建一个在 AIO-Sandbox 中执行的独立 Crew。
-
-    Args:
-        skill_name: Skill 名称，用于 Agent role 和日志
-        skill_instructions: 完整 SKILL.md 正文（已剥离 frontmatter + 注入沙盒路径指令）
-        session_id: 当前会话 ID，Agent 使用此 ID 确定沙盒工作目录
-        sandbox_mcp_url: AIO-Sandbox MCP 端点 URL
-        sub_agent_model: Sub-Agent 使用的 LLM 模型名
-        max_iter: Sub-Agent 最大迭代次数，防止无限循环
-
-    Returns:
-        已配置好的 Crew 实例，可直接调用 kickoff() / akickoff()
-    """
-    # 💡【第14课·MCP 接入】MCPServerHTTP 是 CrewAI 原生 MCP 接入方式
-    # framework 自动将 MCP 工具转换为 Agent 可用工具，无需手动封装
-    # 💡【第03课·工厂模式】每次构建新实例 → 新的 MCP 连接 → 状态完全隔离
-    sandbox_mcp = MCPServerHTTP(
-        url=sandbox_mcp_url,
-    )
-
+    if not sandbox_mcp_url or not sandbox_mcp_url.startswith(("http://", "https://")):
+        raise ValueError(
+            f"build_skill_crew: sandbox_mcp_url must be an http(s) URL, got "
+            f"{sandbox_mcp_url!r}. Empty or malformed URLs cause httpx.UnsupportedProtocol "
+            f"deep inside Sub-Crew, which manifests as a 5-minute TestAPI timeout. "
+            f"Pass a valid URL (e.g. http://localhost:8030/mcp) or skip skill execution."
+        )
+    sandbox_mcp = MCPServerHTTP(url=sandbox_mcp_url)
     skill_llm = AliyunLLM(model=sub_agent_model, region="cn", temperature=0.3)
 
-    session_dir = (
-        f"/workspace/sessions/{session_id}" if session_id else "/workspace/sessions/<session_id>"
-    )
+    session_dir = f"/workspace/sessions/{session_id}" if session_id else "/workspace"
 
-    agents_cfg = _load_yaml(_CONFIG_DIR / "agents.yaml")
-    tasks_cfg = _load_yaml(_CONFIG_DIR / "tasks.yaml")
+    agents_cfg = yaml.safe_load((_CONFIG_DIR / "agents.yaml").read_text(encoding="utf-8"))
+    tasks_cfg = yaml.safe_load((_CONFIG_DIR / "tasks.yaml").read_text(encoding="utf-8"))
 
-    # 💡【第07课·动态人设】skill_name_upper 供 role 用，skill_name 供 goal/backstory 用
-    # skill_instructions 已由 _get_skill_instructions() 转义 {var} → {{var}}，
-    # Python format 时其内容作为 VALUE 传入，不会被二次解析
-    agent_fmt_vars = dict(
+    agent_cfg = _format_cfg(
+        agents_cfg["skill_agent"],
         skill_name=skill_name,
         skill_name_upper=skill_name.upper(),
         session_dir=session_dir,
         skill_instructions=skill_instructions,
     )
-    skill_agent_cfg = _format_cfg(dict(agents_cfg["skill_agent"]), **agent_fmt_vars)
-    # max_iter 是运行时参数，不在 YAML 中定义，直接注入
-    skill_agent_cfg["max_iter"] = max_iter
+    agent_cfg["max_iter"] = max_iter
 
-    # 💡【第07课·Agent 三要素】role/goal/backstory 从 YAML 加载，工具/LLM 绑定在 Python 层
     skill_agent = Agent(
-        **skill_agent_cfg,
+        **agent_cfg,
         llm=skill_llm,
-        # 💡【第14课·MCP 接入】mcps 参数接收 MCPServerHTTP 列表，框架自动管理连接
         mcps=[sandbox_mcp],
         verbose=True,
     )
 
-    # 💡【第08课·Task 契约】description/expected_output 从 YAML 加载
-    # {{task_context}} 经 Python format 变为 {task_context}，
-    # 由 SkillLoaderTool 通过 akickoff(inputs={"task_context": ...}) 注入
-    skill_task_cfg = _format_cfg(dict(tasks_cfg["skill_task"]), session_dir=session_dir)
+    task_cfg = _format_cfg(tasks_cfg["skill_task"], session_dir=session_dir)
+    skill_task = Task(**task_cfg, agent=skill_agent)
 
-    # 💡【第08课·Task 契约两要素】description 明确执行环境约束，expected_output 定义 JSON 格式
-    # 注意：{task_context} 由 akickoff(inputs=...) 显式注入（第09课·显式上下文传递）
-    skill_task = Task(
-        **skill_task_cfg,
-        agent=skill_agent,
-    )
+    @before_tool_call
+    def _subcrew_tool_hook(context: ToolCallHookContext) -> bool | None:
+        _normalize_subcrew_tool_input(context.tool_input)
+        return None
 
-    # 💡【第09课·Sequential Process】Sub-Crew 同样使用顺序执行
-    # 单 Agent 单 Task 天然顺序，此处显式声明让代码意图清晰
-    # 注意：Sub-Crew 不传入 step_callback——Sub-Crew 的推理过程不推送到飞书，
-    # 避免在 verbose 模式下产生对用户来说难以理解的底层执行噪音
-    return Crew(
+    crew = Crew(
         agents=[skill_agent],
         tasks=[skill_task],
         process=Process.sequential,
         verbose=True,
+        step_callback=_make_subcrew_step_callback(),
     )
+    crew._subcrew_tool_hook = _subcrew_tool_hook  # keep ref for unregister
+    return crew

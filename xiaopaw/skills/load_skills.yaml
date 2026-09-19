@@ -1,50 +1,54 @@
-# Skill 清单 — XiaoPaw 小爪子工作助手
-#
-# type 字段区分 Skill 的执行方式：
-#   task      → 触发独立 Sub-Crew 在 AIO-Sandbox 中执行（需要代码运行）
-#   reference → 直接注入指令到调用方上下文，不启动 Sub-Crew（只读规范类）
-#
-# enabled: false 时 SkillLoaderTool 跳过该 Skill，不注入到 description
+# Skill manifest — XiaoPaw v3
+# type: task (Sub-Crew + sandbox) | reference (inject instructions)
 
-skills:
-  # ── 文件处理 ──────────────────────────────────────────────────────────────
-  - name: pdf
-    type: task        # 需要代码执行（pypdf / pdfplumber）
-    enabled: true
+pdf:
+  type: task
+  enabled: true
 
-  - name: docx
-    type: task        # 需要代码执行（python-docx / pandoc）
-    enabled: true
+docx:
+  type: task
+  enabled: true
 
-  - name: pptx
-    type: task        # 需要代码执行（python-pptx / markitdown）
-    enabled: true
+pptx:
+  type: task
+  enabled: true
 
-  - name: xlsx
-    type: task        # 需要代码执行（pandas / openpyxl）
-    enabled: true
+xlsx:
+  type: task
+  enabled: true
 
-  # ── 飞书平台操作 ────────────────────────────────────────────────────────────
-  - name: feishu_ops
-    type: task        # 需要代码执行（飞书 REST API 调用）
-    enabled: true
+feishu_ops:
+  type: task
+  enabled: true
 
-  # ── 定时任务管理 ────────────────────────────────────────────────────────────
-  - name: scheduler_mgr
-    type: task        # 需要代码执行（读写 tasks.json）
-    enabled: true
+scheduler_mgr:
+  type: task
+  enabled: true
 
-  # ── 网页搜索 ────────────────────────────────────────────────────────────────
-  - name: baidu_search
-    type: task        # 需要代码执行（调用百度千帆搜索 API）
-    enabled: true
+baidu_search:
+  type: task
+  enabled: true
 
-  # ── 网页浏览与内容提取 ──────────────────────────────────────────────────────
-  - name: web_browse
-    type: task        # 需要代码执行（browser_* 工具 + sandbox_convert_to_markdown）
-    enabled: true
+web_browse:
+  type: task
+  enabled: true
 
-  # ── 历史记录读取（参考型：Agent 自行推理，无需 Sub-Crew）──────────────────────
-  - name: history_reader
-    type: reference   # 直接返回操作规范给主 Agent
-    enabled: true
+history_reader:
+  type: reference
+  enabled: true
+
+memory-save:
+  type: task
+  enabled: true
+
+skill-creator:
+  type: task
+  enabled: true
+
+memory-governance:
+  type: task
+  enabled: true
+
+search_memory:
+  type: task
+  enabled: true

@@ -1,27 +1,128 @@
-# XiaoPaw 详细设计文档
+# XiaoPaw v2 详细设计文档（总纲）
 
-> **项目**：XiaoPaw（小爪子）——飞书本地工作助手
-> **课程**：第17课 项目实战2（工具篇）
-> **版本**：v1.2
-> **最后更新**：2026-03-10
+- **项目**：XiaoPaw v2（小爪子 v2）— 飞书本地工作助手（生产加固版）
+- **版本**：**v3**（2026-04-24 系统加固）/ v2.1（2026-04-19 升级）
+- **原始日期**：2026-04-17（v2.0-draft）
+- **前身**：`/root/course/code/xiaopaw-with-memory/`（第 22 课教学示例）
+- **改造依据**：
+  - 《01_Review报告_xiaopaw-with-memory.md》：4 CRITICAL + 10 HIGH + 11 MEDIUM + 3 LOW 缺陷清单
+  - 《02_重构设计文档_xiaopaw-with-memory_v2.md》：基于 4 路 sub-agent review 的方案
+  - **v2.1 新增**：5 路文档 review 发现的 36 个问题 + Phase 0 SDK/并发验证报告
+- **设计底线**：保留课程 L18–L22 全部教学意图（三层记忆架构 / `@before_llm_call` / Bootstrap 四件套 / 文件系统记忆写通道 / pgvector 混合检索），仅加"生产外衣"。
 
 ---
 
-## 目录
+## 📝 v2.0 → v2.1 变更日志（ADR-v2.1-001 ~ 010）
 
-1. [项目概述](#1-项目概述)
-2. [系统架构](#2-系统架构)
-3. [目录结构](#3-目录结构)
-4. [模块设计](#4-模块设计) → [详细文档](docs/design-modules.md)
-5. [数据设计](#5-数据设计) → [详细文档](docs/design-data.md)
-6. [接口设计](#6-接口设计) → [详细文档](docs/design-api.md)
-7. [MVP Skills 设计](#7-mvp-skills-设计)
-8. [功能特性设计](#8-功能特性设计)
-9. [安全设计](#9-安全设计)
-10. [配置设计](#10-配置设计)
-11. [运维设计](#11-运维设计)
-12. [待确认事项](#12-待确认事项)
-13. [可观测性设计](#13-可观测性设计) → [详细文档](docs/design-observability.md)
+**Phase 0 验证后的重大修正**（详见 `sdk-verification-report.md` / `concurrency-verification-report.md`）：
+
+| ADR | 修正 | 影响文档 |
+|---|---|---|
+| **ADR-v2.1-001** | `lark-oapi.ws.Client` **不支持** `encrypt_key` / `verification_token` 参数；WebSocket 模式验签由飞书服务端做。T3 防御改为**应用层 ReplayCache**（event_id LRU+TTL） | 07 / 04 / 02 / 09 |
+| **ADR-v2.1-002** | Session 锁方案改为 **`_dispatch_lock` + LRUCache 两级锁**。承认 LRUCache 核心是防 OOM 不是防竞态 | 02 / 05 / 01 |
+| **ADR-v2.1-003** | `psycopg_pool`（psycopg3）**不兼容** psycopg2；改用 `psycopg2.pool.ThreadedConnectionPool` | 04 / 09 / 11 |
+| **ADR-v2.1-004** | `lark-oapi` 响应属性是 `.raw` 不是 `.raw_response`；全文替换 | 02 / 04 |
+| **ADR-v2.1-005** | `run_in_executor` **任何 Python 版本都不自动 copy_context**（非 3.13 bug）；`to_thread` 自 3.9 起自动。shutdown 改用公开 `loop.shutdown_default_executor()` | 05 / 06 |
+| **ADR-v2.1-006** | `@before_llm_call` 必须 **in-place 修改 messages**（`messages[:] = ...`）；`context.llm.context_window_size` 从 config 读固定值 | 02 |
+| **ADR-v2.1-007** | 新增威胁 T8-T11（Cron→Runner 注入 / MCP 宿主暴露 / Cron payload 注入 / routing_key 伪造）；T1 残余风险从 MEDIUM 升 HIGH | 07 / 01 |
+| **ADR-v2.1-008** | 5 张 SSOT 权威清单（`docs/ssot/`）：locks / tasks / ports / feature-flags / threats；其他文档引用不硬编码 | 所有 |
+| **ADR-v2.1-009** | 端口统一：health+metrics 同端口 **8090**；TestAPI **9090**（显式 loopback bind）；sandbox 容器间 **8080** | 04 / 06 / 08 / 09 |
+| **ADR-v2.1-010** | `save_session_ctx + append_session_raw` 双写拆分：MemoryAwareCrew 只返回 reply 和暴露 `_index_coroutine`，写动作统一在 Runner._handle | 02 / 05 |
+
+**新增产出**：
+- `docs/ssot/` — 5 张 SSOT 清单
+- `docs/sdk-verification-report.md` — SDK 真相报告
+- `docs/concurrency-verification-report.md` — 并发真相报告
+- `docs/test-cases-for-known-risks.md` — 26 组已知风险测试用例
+- `docs/iteration-v2.1-plan.md` — 迭代计划
+
+---
+
+## 📝 v2.1 → v3 变更日志（系统加固，2026-04-24 ~ 2026-05-02）
+
+**设计文档**：`docs/12-hook-hardening.md`（v3.1-rc1，4-way Review + E2E 反向验证）
+
+### 核心新增
+
+| 变更 | 内容 | 影响文档 |
+|---|---|---|
+| **Hook 框架** | HookRegistry（dispatch/dispatch_gate）+ HookLoader（两层 YAML）+ CrewObservabilityAdapter（4→7 映射）| 12 / 02 / 01 |
+| **5+2 事件体系** | BEFORE_TURN/BEFORE_LLM/BEFORE_TOOL_CALL/AFTER_TOOL_CALL/AFTER_TURN + TASK_COMPLETE/SESSION_END | 12 |
+| **shared_hooks/ 加固层** | 9 个策略文件（1337 行），hooks.yaml 两段式配置，零业务代码修改 | 12 |
+| **观测策略** | structured_log（82 行）+ langfuse_trace（779 行，含 span 栈 + auto-close + batch flush）| 12 / 06 |
+| **安全策略** | sandbox_guard（107 行，正则输入消毒）+ permission_gate（75 行，三级控制）+ audit_logger（63 行）| 12 / 07 |
+| **可靠性策略** | cost_guard（69 行，$1 预算围栏）+ loop_detector（50 行，阈值 3）+ retry_tracker（40 行）| 12 |
+| **Runner 集成** | pending_deny 检查 + GuardrailDeny 捕获 + 7 事件 dispatch 调用点 | 02 / 05 |
+
+### 测试
+
+| 类型 | 数量 | 新增文件 |
+|---|---|---|
+| 单元测试 | 188（shared_hooks 106 + hook_framework 64 + v3_fixes 18）| tests/unit/shared_hooks/ + tests/unit/hook_framework/ |
+| 集成测试 | 40（hook_chain / security_chain / adapter / two_layer_config / deny_flow / trace_quality / deny_observability）| tests/integration/ |
+| E2E | 65 用例 / 15 场景 + 2 persona（覆盖 L8-L22 + L30-L32）| tests/e2e/ |
+| **合计** | **293** | |
+
+### E2E 验证与修复
+
+| 文档 | 发现 |
+|---|---|
+| `14-e2e-test-design.md` | 15 场景覆盖矩阵、2 层 client（slash_client / llm_client）、LLM-as-Judge 断言 |
+| `15-e2e-fix-structured-log-and-timing.md` | 5 个问题：3 缺失 handler / duration_ms=0 / Langfuse init 静默失败 / tool_call 计数不匹配 / E2E-11 超时 |
+| `langfuse-trace-fix-design.md` | 8 个 trace 质量问题（P1-P8）：AFTER_TURN 语义混淆、span 树 3 层嵌套预期 |
+| `e2e-05-search-regression-report.md` | 搜索场景回归验证通过，185.46s，21 observations |
+| `e2e-05-langfuse-trace-deep-analysis.md` | trace 质量审计：86% 有 input，62% 有 output，0% 有 token usage |
+
+### 4-Way Review 结论（ADR-v3-001 ~ ADR-v3-008）
+
+- **2 CRITICAL**：ADR-v3-001 全局 hook 并发安全 / ADR-v3-002 pending_deny 静默丢弃
+- **6 HIGH**：ADR-v3-003 ~ 008（handler 异常隔离、策略注册顺序、cost 精度等）
+- **8 MEDIUM**：见 `12-hook-hardening.md` §12
+
+---
+
+## 📖 文档导航
+
+本文档为**总纲**，链接各专题子文档。阅读顺序建议：
+
+| 优先级 | 文档 | 目标读者 | 核心回答 |
+|---|---|---|---|
+| ⭐⭐⭐ | 本文档 | 所有人 | 这个系统是什么？为什么存在？v1→v2 改了什么？ |
+| ⭐⭐⭐ | [01-architecture.md](docs/01-architecture.md) | 架构师 / 新加入工程师 | 整体架构图、数据流、信任边界 |
+| ⭐⭐⭐ | [02-modules.md](docs/02-modules.md) | 实现工程师 | 每个模块职责、接口、关键实现 |
+| ⭐⭐ | [03-data.md](docs/03-data.md) | 实现工程师 / DBA | Session 存储、pgvector schema、ctx.json 格式 |
+| ⭐⭐ | [04-api.md](docs/04-api.md) | 集成方 | 飞书接入、TestAPI、/metrics、/health |
+| ⭐⭐⭐ | [05-concurrency.md](docs/05-concurrency.md) | 实现工程师 | 锁模型、队列、task 生命周期（v2 核心加固点） |
+| ⭐⭐ | [06-observability.md](docs/06-observability.md) | SRE | trace_id、metrics、日志、告警 |
+| ⭐⭐⭐ | [07-security.md](docs/07-security.md) | 安全工程师 / 运维 | 威胁模型、凭证管理、合规基线（v2 新增） |
+| ⭐⭐ | [08-deployment.md](docs/08-deployment.md) | 运维 | Docker 部署、配置、健康检查、回滚 |
+| ⭐⭐ | [09-config.md](docs/09-config.md) | 运维 / 实现 | config.yaml 字段、feature flags、env 优先级 |
+| ⭐⭐ | [10-testing.md](docs/10-testing.md) | 实现工程师 / QA | 测试分层、覆盖率要求、故障注入 |
+| ⭐ | [11-migration-v1-to-v2.md](docs/11-migration-v1-to-v2.md) | v1 既有部署方 | 从 v1 升级到 v2 的步骤 |
+| ⭐⭐⭐ | [12-hook-hardening.md](docs/12-hook-hardening.md) | 架构师 / 安全 / SRE | **【v3 新增】** Hook 框架 + 可靠性策略 + 安全策略（模块五集成） |
+| ⭐⭐ | [13-test-design-hook-hardening.md](docs/13-test-design-hook-hardening.md) | QA / 实现 | **【v3 新增】** 加固层测试设计（136 用例规格） |
+| ⭐⭐ | [14-e2e-test-design.md](docs/14-e2e-test-design.md) | QA / 实现 | **【v3 新增】** E2E 测试设计（15 场景覆盖矩阵） |
+| ⭐ | [15-e2e-fix-structured-log-and-timing.md](docs/15-e2e-fix-structured-log-and-timing.md) | 实现 | **【v3 新增】** E2E 发现的 5 个问题修复记录 |
+| ⭐ | [langfuse-trace-fix-design.md](docs/langfuse-trace-fix-design.md) | 实现 / SRE | **【v3 新增】** Langfuse trace 质量 8 问题修复设计 |
+
+### SSOT 权威清单（v2.1 新增，所有文档引用不硬编码）
+
+| 清单 | 内容 |
+|---|---|
+| [`docs/ssot/locks.md`](docs/ssot/locks.md) | 所有锁（asyncio.Lock / Semaphore / filelock / LRUCache）× 资源 × 粒度 × 失败降级 |
+| [`docs/ssot/tasks.md`](docs/ssot/tasks.md) | 所有 asyncio Task / 后台循环 / executor 任务 + shutdown 顺序 |
+| [`docs/ssot/ports.md`](docs/ssot/ports.md) | 所有端口（8090 / 9090 / 8080 / 5432）及其鉴权 |
+| [`docs/ssot/feature-flags.md`](docs/ssot/feature-flags.md) | 12 个 feature flag × 默认值 × 对应缺陷 × 回滚风险 |
+| [`docs/ssot/threats.md`](docs/ssot/threats.md) | T1-T11 威胁 × STRIDE × 防御层 × 残余风险 × 测试锚点 |
+
+### Phase 0 专题报告（v2.1 新增）
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/sdk-verification-report.md`](docs/sdk-verification-report.md) | lark-oapi / CrewAI / psycopg / 飞书错误码真相验证 |
+| [`docs/concurrency-verification-report.md`](docs/concurrency-verification-report.md) | LRUCache / copy_context / shutdown / filelock 并发行为验证 |
+| [`docs/test-cases-for-known-risks.md`](docs/test-cases-for-known-risks.md) | 26 组针对已知风险的测试用例（P0/P1/P2/P3）+ CI gate 补丁表 |
+| [`docs/iteration-v2.1-plan.md`](docs/iteration-v2.1-plan.md) | v2.0 → v2.1 迭代计划 + 36 问题修订路线 |
 
 ---
 
@@ -29,509 +130,623 @@
 
 ### 1.1 定位
 
-**XiaoPaw**（小爪子）是基于飞书的**本地工作助手**，通过 Skills 生态（第16课）让 Agent 接入大量工具能力，同时保证企业级安全隔离。
+**XiaoPaw v2**（小爪子 v2）是第 22 课教学示例的生产加固版本：
+- **保留**：飞书本地助手（WebSocket 长连接、无需公网 IP、Skills 生态、AIO-Sandbox 执行隔离）
+- **保留**：三层记忆架构（L19 上下文 / L20 文件 / L21 搜索）
+- **加固**：并发安全、容错降级、可观测、安全合规、测试覆盖
 
-| 维度 | 设计决策 |
-|------|---------|
-| 接入方式 | 飞书 WebSocket 长连接，无需公网 IP，适合本地/内网部署 |
-| 能力扩展 | Skills 驱动，所有能力通过 SKILL.md 动态加载 |
-| 执行安全 | 所有执行类操作统一走 AIO-Sandbox（Docker 隔离），credentials 不进模型 |
-| 隔离单元 | 每个飞书应用对应一个独立的 Workspace 进程，技能/记忆/配置互不干扰 |
+### 1.2 v1 vs v2 核心差异
 
-### 1.2 课程分工
+| 维度 | v1（教学示例） | v2（生产加固） |
+|---|---|---|
+| 凭证 | dummy 值随 `config.yaml` 入库 | `.env` 注入 + 正则+hash 安全校验 |
+| Session 锁 | `dict` 永驻（长跑 OOM） | `LRUCache(1000)` 自然淘汰 |
+| 索引 task | `create_task` 局部变量（Py3.12+ GC 风险） | Runner 集合托管 + `add_done_callback` |
+| 搜索隔离 | `routing_key` 可空（跨用户泄露） | 三层强制（脚本 required + Skill required + SkillLoader 校验拒绝覆盖） |
+| Token 计数 | `len//2` 粗估（偏差 25%） | Qwen 官方 tokenizer（首选）+ rough 降级 |
+| Skill 超时 | 无（Sub-Crew 卡死阻塞队列） | `asyncio.wait_for` + 主动 sandbox kill |
+| 飞书限流 | 固定退避不识别 429 | 真实错误码 99991663/99991672 + HTTP 层 429 |
+| Cron 存储 | 单进程原子写 | `filelock` 跨进程（单节点）/ PG advisory lock（多节点） |
+| memory-save 并发 | 无锁（最后写入覆盖） | Topic 文件锁 + 超时报错 |
+| 观测 | logger INFO + `/metrics` 无鉴权 | trace_id 贯穿 + Bearer Token + 8 核心指标 |
+| 威胁模型 | 未讨论 | MCP 白名单 + memory 投毒过滤 + webhook 验签 + 入站速率限制 |
+| 合规 | 未讨论 | PII 脱敏 + 数据本地化披露 + 日志留存 + 凭证轮换 runbook |
+| 部署 | `:latest` 无 healthcheck | tag+digest + healthcheck + `USER nobody` |
+| 测试 | 642 单元，86% cov，4 个失败 | ≥720 单元，88% cov（模块级 ≥90%），4 失败清零 |
+| CI/CD | 无 | Actions + pre-commit + pip-audit(HIGH fail) + trace 覆盖率 gate |
 
-| 课程 | 内容 |
-|------|------|
-| **第17课**（本课） | 完整框架 + 飞书接入 + 全部 MVP Skills + 定时任务 |
-| **第22课**（记忆篇） | 长记忆沉淀、上下文管理、Entity Memory |
-
-### 1.3 MVP Skills
-
-| Skill | 类型 | 核心能力 |
-|-------|------|---------|
-| `pdf` | 任务型 | PDF 解析、文本提取、格式转换 |
-| `docx` | 任务型 | Word 文档读取与处理 |
-| `pptx` | 任务型 | PPT 文档读取与处理 |
-| `xlsx` | 任务型 | Excel 表格读取与处理 |
-| `feishu_ops` | 任务型 | 发文字/富文本/图片/文件消息；读云文档/表格；查群成员；管理日历 |
-| `scheduler_mgr` | 任务型 | 通过脚本封装创建/查看/更新/删除定时任务 |
-| `baidu_search` | 任务型 | 百度千帆网络搜索，支持时间过滤与站点限定，返回标题/URL/摘要 |
-| `web_browse` | 任务型 | 网页内容提取（Markdown 快速转换）+ 完整浏览器自动化（截图/表单/JS 交互） |
-| `history_reader` | 内联型 | 分页读取历史对话记录（SkillLoaderTool 内部处理，无需沙盒） |
-
-### 1.4 实现状态
-
-全部功能模块已实现并通过测试（562 单元测试，86% 覆盖率；29 集成测试）。
-
-消息处理主链路已全面打通：飞书 WebSocket → FeishuListener → Runner → Main Agent（SkillLoaderTool）→ Sub-Crew（AIO-Sandbox）→ FeishuSender。所有 Skills 已实现。CleanupService、CronService、TestAPI、metrics 均已在 main.py 接入。
-
-最近新增功能（2026-03-09）：
-- **卡片消息 + Loading 效果**：send_thinking() 发起加载卡片，update_card() 替换为最终结果
-- **Markdown 渲染**：interactive 卡片格式，支持 lark_md Markdown 富文本
-- **Post 富文本解析**：FeishuListener 正确解析 msg_type="post" 消息
-- **Bot 入群欢迎事件**：监听 im.chat.member.bot.added_v1，支持自定义回调
-- **Allowed chats 白名单**：可选参数控制群消息白名单，p2p 始终开放
-
-最近新增功能（2026-03-10）：
-- **baidu_search Skill**：百度千帆网络搜索，支持时间过滤与站点限定
-- **web_browse Skill**：网页内容提取（Markdown 快速转换）+ 完整浏览器自动化
-- **搜索策略**：主 Agent backstory 新增 baidu_search > web_browse 优先级策略
-- **Sub-Crew 开放全部 MCP 工具**：移除 `create_static_tool_filter` 白名单，开放 AIO-Sandbox 全部工具（含 browser_* 系列）；在 Agent backstory 中以行为约束替代接口级白名单
-- **baidu_search 凭证注入**：CleanupService 新增 `write_baidu_credentials()`，启动时将 BAIDU_API_KEY 写入沙盒 `.config/baidu.json`
-- **日志修复**：`setup_logging()` 新增控制台 handler（之前仅输出文件日志），root logger 显式设置 INFO 级别
-- **模板变量修复**：SkillLoaderTool 新增 `_CREWAI_VAR_PATTERN`，对 SKILL.md 中已转义的 `{{var}}` 构造自映射 inputs，避免 CrewAI "Template variable not found" 报错
-
----
-
-## 2. 系统架构
-
-### 2.1 整体架构图
-
-```mermaid
-graph TB
-    subgraph 飞书平台
-        FS_WS[飞书 WebSocket 事件]
-        FS_API[飞书 REST API]
-    end
-
-    subgraph XiaoPaw 主进程
-        FL[FeishuListener\nlark-oapi ws.Client]
-        SR[SessionRouter\n路由键解析]
-        Runner[Runner\n执行引擎]
-        DL[FeishuDownloader\n文件/图片下载]
-        CS[CronService\nasyncio 精确 timer]
-
-        subgraph Agent层
-            MA[Main Agent\nSkillLoaderTool 唯一工具]
-            SLT[SkillLoaderTool\n渐进式披露]
-            SC[Sub-Crew\nbuild_skill_crew 工厂]
-        end
-
-        FS[FeishuSender\nREST 直发，不走 Skill]
-        CLS[CleanupService\n定期清理过期文件]
-    end
-
-    subgraph 存储层
-        IDX[(sessions/index.json\n路由映射 + session 元数据)]
-        SESS[(sessions/jsonl\n清洁对话历史)]
-        TRACE[(traces/\n完整执行追踪)]
-        TJ[(cron/tasks.json\n定时任务配置)]
-        WS[(workspace/sessions/{sid}/\nuploads / outputs / tmp)]
-    end
-
-    subgraph AIO-Sandbox 容器
-        SB[MCP Server\n全部工具开放]
-        CFG[.config/feishu.json\n.config/baidu.json\ncredentials 预置]
-    end
-
-    FS_WS -->|WebSocket 推送| FL
-    FL -->|InboundMessage\n含附件元信息| SR
-    SR --> Runner
-    Runner -->|读写| IDX
-    Runner -->|session 确定后| DL
-    DL -->|GET /messages/:id/resources/:key| FS_API
-    DL -->|写入 session uploads/| WS
-    Runner -->|读写| SESS
-    Runner -->|写入| TRACE
-    Runner --> MA
-    MA --> SLT
-    SLT -->|参考型| MA
-    SLT -->|任务型| SC
-    SC -->|MCP| SB
-    SB -->|读取| CFG
-    SB -->|读写| WS
-    Runner --> FS
-    FS -->|REST API| FS_API
-    CS -->|mtime 热重载| TJ
-    CS -->|fake InboundMessage| Runner
-    CLS -->|按策略删除| WS
-    CLS -->|按策略删除| TRACE
-    CLS -->|按策略删除| SESS
-```
-
-### 2.2 消息主处理时序
-
-```mermaid
-sequenceDiagram
-    participant F as 飞书
-    participant FL as FeishuListener
-    participant SR as SessionRouter
-    participant R as Runner
-    participant DL as Downloader
-    participant MA as Main Agent
-    participant SLT as SkillLoaderTool
-    participant SC as Sub-Crew
-    participant SB as AIO-Sandbox
-    participant FS as FeishuSender
-
-    F->>FL: WebSocket P2ImMessageReceiveV1
-    FL->>FL: 解析 EventMessage
-    FL->>SR: EventMessage → resolve_routing_key()
-    SR->>R: InboundMessage{routing_key, content, msg_id, attachment?, ...}
-    R->>R: dispatch → 入队 per-routing_key Queue
-
-    Note over R: worker 串行消费
-    R->>R: load_session(routing_key) → session_id
-
-    alt msg 有 attachment 元信息
-        R->>DL: download_attachment(message_id, file_key, session uploads/ 目录)
-        DL->>F: GET /messages/:id/resources/:key
-        F-->>DL: 二进制内容
-        DL->>DL: 写入 workspace/sessions/{sid}/uploads/
-        DL-->>R: 本地文件路径
-        R->>R: content 改写为文件路径提示
-    end
-
-    R->>R: TraceWriter.init(session_id, msg_id)
-    R->>R: 拦截 slash command（/new /verbose /help）
-
-    R->>MA: crew.akickoff(inputs={history, user_message})
-
-    loop 每轮 ReAct
-        MA->>MA: Thought（推理）
-        alt verbose=true && 非 thread
-            MA-->>F: 💭[推理过程]\n{thought}（异步推送）
-        end
-        MA->>SLT: skill_loader(skill_name, task_context)
-        alt 参考型 Skill
-            SLT->>SLT: 读 SKILL.md 正文
-            SLT-->>MA: 指令文本
-        else 任务型 Skill
-            SLT->>SC: build_skill_crew(skill, instructions)
-            SC->>SB: sandbox_execute_*
-            SB-->>SC: 执行结果
-            SC-->>SLT: SkillResult
-            SLT->>TRACE: 写 skills/{name}.jsonl
-            SLT-->>MA: 任务摘要
-        end
-    end
-
-    MA-->>R: result.raw
-    R->>TRACE: 写 main.jsonl + meta.json
-    R->>SESS: session_append(user + assistant)
-    R->>FS: send(routing_key, result.raw)
-    FS->>F: REST API 发消息
-```
-
----
-
-## 3. 目录结构
+### 1.3 部署形态
 
 ```
-xiaopaw/
-├── main.py / config.yaml / requirements.txt
-├── llm/aliyun_llm.py            # CrewAI BaseLLM 适配器（通义千问）
-├── feishu/
-│   ├── listener.py              # WebSocket 事件 → InboundMessage
-│   ├── downloader.py            # 文件/图片下载（session 确定后调用）
-│   ├── sender.py                # 消息发送（create/reply），含重试
-│   └── session_key.py           # routing_key 解析
-├── api/test_server.py           # 测试 API（仅 debug 模式）
-├── runner.py                    # 执行引擎（session/slash/Agent/存储/发送）
-├── agents/
-│   ├── main_crew.py             # 主 Crew（build_agent_fn 工厂）
-│   └── skill_crew.py            # Sub-Crew 工厂（build_skill_crew）
-├── tools/
-│   ├── skill_loader.py          # SkillLoaderTool（渐进式披露 + Sub-Crew 触发）
-│   ├── add_image_tool_local.py  # 本地图片 → Base64 Data URL
-│   ├── baidu_search_tool.py     # 百度千帆 web_search 封装
-│   └── intermediate_tool.py     # 中间产物保存
-├── observability/
-│   ├── logging_config.py        # 日志（控制台 + JSON 行文件）
-│   ├── metrics.py               # Prometheus 指标定义
-│   └── metrics_server.py        # /metrics HTTP 服务
-├── session/manager.py + models.py
-├── cron/service.py + models.py
-├── cleanup/service.py           # CleanupService（sweep + workspace 初始化 + feishu/baidu credentials 写入）
-├── skills/                      # pdf/ docx/ pptx/ xlsx/ feishu_ops/ scheduler_mgr/ baidu_search/ web_browse/ history_reader/
-└── data/                        # 运行时数据（.gitignore）
-    ├── sessions/index.json + {sid}.jsonl
-    ├── traces/{sid}/{ts}_{msg_id}/  # meta.json + main.jsonl + skills/
-    ├── cron/tasks.json
-    └── workspace/.config/feishu.json + .config/baidu.json + sessions/{sid}/uploads|outputs|tmp
+[用户/运维]          [XiaoPaw v2 主进程]             [外部依赖]
+   │                        │                           │
+   │   飞书 WebSocket (长连) │                           │
+   ├──────────────────────▶ │                           │
+   │                        │   Qwen API (DashScope)    │
+   │                        ├──────────────────────────▶│
+   │                        │   百度千帆 API             │
+   │                        ├──────────────────────────▶│
+   │                        │   pgvector（单节点内网）   │
+   │                        ├──────────────────────────▶│
+   │                        │   AIO-Sandbox (Docker)    │
+   │                        ├──────────────────────────▶│
+   │   Prometheus 拉取指标   │                           │
+   ├──────────────────────▶ │                           │
+```
+
+**v2 单节点部署前提**（见 §2.4）：本次加固不支持多副本/多节点。多节点需等 M4 阶段规划。
+
+### 1.4 非目标（Non-Goals）
+
+v2 明确**不做**的事，避免范围蠕变：
+
+- ❌ 换掉 CrewAI / Qwen（是课程核心依赖，教学意义大）
+- ❌ 换掉 pgvector 为 Milvus / Qdrant（课程特意演示 PG 一张表搞定）
+- ❌ 改记忆写通道为数据库（课文刻意强调"文件系统记忆"）
+- ❌ 多 Agent 协调 / 多节点部署 / 跨副本并发（M4 范畴）
+- ❌ 替换 aiohttp 为 FastAPI（无必要）
+- ❌ 流式响应（飞书卡片 UI 限制）
+
+---
+
+## 2. 系统架构（摘要）
+
+> 详细架构图、数据流时序、信任边界图见 [01-architecture.md](docs/01-architecture.md)。
+
+### 2.1 核心概念
+
+**消息流**：
+```
+飞书 WebSocket ─▶ FeishuListener ─▶ SessionRouter (routing_key)
+                                        ▼
+                                    Runner (per-routing_key 串行队列)
+                                        ▼
+              ┌──── slash command 拦截 ────┐
+              │ /new /verbose /help /status │
+              └─────────────────────────────┘
+                                        ▼
+                              MemoryAwareCrew
+                              ├── @before_llm_call
+                              │    ├── Bootstrap（首次）
+                              │    ├── prune_tool_results
+                              │    └── maybe_compress
+                              └── SkillLoaderTool
+                                   ├── reference skill → 返回 SKILL.md
+                                   └── task skill → Sub-Crew (Docker sandbox MCP)
+                                        ▼
+                              FeishuSender / CaptureSender
+                                        ▼
+                               飞书卡片 / TestAPI 响应
+```
+
+**路由键三类**：
+- `p2p:{open_id}`（私聊）
+- `group:{chat_id}`（群聊）
+- `thread:{chat_id}:{thread_id}`（话题）
+
+**Skill 两型**：
+- **reference**：SKILL.md 内容返回 Main Agent 自我推理
+- **task**：派生隔离 Sub-Crew，接 AIO-Sandbox MCP（`sandbox_execute_bash` / `_code` / `_file_operations` / `browser_*` 等）
+- **【v2 新增】MCP tool 白名单**：生产模式下 Sub-Crew 仅暴露 Skill 声明的 `allowed_tools`（见 [07-security.md §2](docs/07-security.md)）
+
+**三层记忆**：
+- **L19 上下文层**：`MemoryAwareCrew @CrewBase` + `@before_llm_call` hook
+- **L20 文件层**：`memory-save` / `skill-creator` / `memory-governance` Skills
+- **L21 搜索层**：`search_memory` Skill + pgvector 异步入库、混合检索
+
+### 2.2 系统边界
+
+XiaoPaw v2 **包含**：
+- 主进程（FeishuListener + Runner + Agent + CronService + CleanupService + TestAPI + metrics）
+- pgvector 数据库（作为依赖组件，生产独立部署）
+- AIO-Sandbox 容器（作为依赖组件，独立部署）
+
+**不包含**（外部依赖）：
+- 飞书开放平台（App / WebSocket 服务）
+- Qwen API（阿里云 DashScope）
+- 百度千帆 API
+- Prometheus / Grafana（选配）
+
+### 2.3 信任边界（v2 新增核心）
+
+```
+[Untrusted]                          [Semi-Trusted]                       [Trusted]
+飞书 Webhook  ─(签名校验)─▶ FeishuListener ─(内部队列)─▶ Runner
+                                                             │
+用户 Test API  ─(Bearer Token)─▶ TestAPI ──────────────────▶│
+                                                             │
+                                                             ▼
+                                                       MemoryAwareCrew
+                                                             │
+                                              (MCP tool 白名单)
+                                                             │
+                                                             ▼
+                                                       Sub-Crew (Sandbox)
+                                                             │
+                                              (路径遍历防护 + 非 root)
+                                                             │
+                                              ┌──────────────┴──────────────┐
+                                              ▼                              ▼
+                                       pgvector (权限最小化)            workspace 目录
+                                              (RLS / 按 routing_key 隔离) (mount 精确到 session)
+```
+
+**信任边界规则**：
+1. **未信任侧**（飞书 Webhook / TestAPI 用户输入）：**必须**经过签名/token 校验才能流入内部
+2. **半信任侧**（Runner / Agent）：执行业务逻辑；不直接接外网
+3. **信任侧**（pgvector / workspace）：仅允许经过鉴权的内部请求访问
+
+---
+
+## 3. 目录结构（v2）
+
+```
+xiaopaw-v2/
+├── README.md                        # 项目概览 + 快速开始
+├── DESIGN.md                        # 本文档（总纲）
+├── config.yaml.example              # 配置模板（checked-in）
+├── .env.example                     # 凭证模板（checked-in）
+├── pyproject.toml
+├── requirements.txt                 # 版本锁定（~=x.y.z）
+├── pgvector-docker-compose.yaml     # pgvector 部署
+├── sandbox-docker-compose.yaml      # AIO-Sandbox 部署
+├── xiaopaw-docker-compose.yaml      # 【v2 新增】主服务 compose
+├── Dockerfile                       # 【v2 新增】USER nobody + multi-stage
+├── schema.sql                       # pgvector 表结构
+│
+├── docs/                            # 详细设计（本总纲链接）
+│   ├── 01-architecture.md
+│   ├── 02-modules.md
+│   ├── 03-data.md
+│   ├── 04-api.md
+│   ├── 05-concurrency.md            # 【v2 新增】
+│   ├── 06-observability.md
+│   ├── 07-security.md               # 【v2 新增】
+│   ├── 08-deployment.md             # 【v2 新增】
+│   ├── 09-config.md                 # 【v2 新增】
+│   ├── 10-testing.md
+│   ├── 11-migration-v1-to-v2.md     # 【v2 新增】
+│   ├── 12-hook-hardening.md         # 【v3 新增】Hook 框架 + 加固策略设计
+│   ├── 13-test-design-hook-hardening.md  # 【v3 新增】加固层测试设计
+│   ├── 14-e2e-test-design.md        # 【v3 新增】E2E 测试设计
+│   ├── 15-e2e-fix-structured-log-and-timing.md  # 【v3 新增】E2E 修复记录
+│   ├── langfuse-trace-fix-design.md # 【v3 新增】Langfuse trace 质量修复
+│   ├── e2e-05-*.md                  # 【v3 新增】E2E 分析报告
+│   ├── threat-model.md              # 【v2 新增】威胁模型
+│   ├── compliance-baseline.md       # 【v2 新增】合规基线
+│   ├── secret-rotation-runbook.md   # 【v2 新增】凭证轮换 runbook
+│   ├── phase0-checklist.md          # 【v2 新增】Phase 0 清单
+│   └── tokenizer-calibration.md     # 【v2 新增】Tokenizer 校准报告
+│
+├── xiaopaw/                         # 主代码
+│   ├── main.py                      # 入口
+│   ├── models.py                    # InboundMessage / Attachment / SenderProtocol
+│   ├── runner.py                    # Runner（per-routing_key 队列 + gen counter）
+│   │
+│   ├── config/                      # 【v2 新增】配置模块
+│   │   ├── validator.py             # Pydantic schema 校验
+│   │   ├── safety.py                # 凭证安全校验（正则+hash）
+│   │   └── flags.py                 # FeatureFlags registry
+│   │
+│   ├── feishu/
+│   │   ├── listener.py              # WebSocket 事件 → InboundMessage（含验签）
+│   │   ├── downloader.py
+│   │   ├── sender.py                # 真实错误码 + HTTP 429 + Semaphore 并发控
+│   │   └── session_key.py
+│   │
+│   ├── api/
+│   │   ├── test_server.py           # Bearer Token + loopback 双重防护
+│   │   ├── capture_sender.py
+│   │   └── schemas.py
+│   │
+│   ├── agents/
+│   │   ├── main_crew.py             # MemoryAwareCrew（crew 仅暴露 _index_coroutine）
+│   │   ├── skill_crew.py
+│   │   ├── models.py
+│   │   └── config/{agents,tasks}.yaml
+│   │
+│   ├── memory/
+│   │   ├── bootstrap.py             # Bootstrap 四件套
+│   │   ├── context_mgmt.py          # prune / compress / ctx.json
+│   │   ├── token_counter.py         # 【v2 新增】Qwen tokenizer（惰性）
+│   │   ├── indexer.py               # @cache 单例
+│   │   └── config.py                # 阈值常量统一
+│   │
+│   ├── tools/
+│   │   ├── skill_loader.py          # MCP tool 白名单 + wait_for 超时
+│   │   ├── add_image_tool_local.py
+│   │   ├── baidu_search_tool.py
+│   │   └── intermediate_tool.py
+│   │
+│   ├── llm/
+│   │   └── aliyun_llm.py            # structured marker JSON（替代字符串）
+│   │
+│   ├── session/
+│   │   ├── manager.py               # LRUCache + asyncio.to_thread 倒序读
+│   │   └── models.py
+│   │
+│   ├── cron/
+│   │   ├── service.py               # filelock + DLQ
+│   │   ├── storage.py               # 【v2 新增】跨进程锁封装
+│   │   └── models.py
+│   │
+│   ├── cleanup/
+│   │   └── service.py
+│   │
+│   ├── observability/
+│   │   ├── logging_config.py        # JSON log + caller + stacktrace
+│   │   ├── trace.py                 # 【v2 新增】ContextVar + executor helper
+│   │   ├── pii_mask.py              # 【v2 新增】手机/邮箱/身份证脱敏
+│   │   ├── security.py              # 【v2 新增】RateLimiter + memory-save filter
+│   │   ├── metrics.py               # 8 个核心指标
+│   │   └── metrics_server.py        # Bearer + constant_time_equals
+│   │
+│   ├── utils/
+│   │   └── retry.py                 # 【v2 新增】tenacity(tuple) 工厂
+│   │
+│   ├── hook_framework/              # 【v3 新增】Hook 框架（592 行）
+│   │   ├── registry.py              # HookRegistry：dispatch + dispatch_gate（118 行）
+│   │   ├── loader.py                # HookLoader：YAML 两层配置 + 依赖注入（197 行）
+│   │   └── crew_adapter.py          # CrewObservabilityAdapter：4→7 映射 + pending_deny（274 行）
+│   │
+│   └── skills/                      # 保留 v1 的 13 个 Skills（MCP 白名单由 SKILL.md frontmatter 声明）
+│       ├── pdf/ docx/ pptx/ xlsx/
+│       ├── feishu_ops/ scheduler_mgr/ baidu_search/ web_browse/
+│       ├── history_reader/
+│       ├── memory-save/             # 含 BLOCKED_PATTERNS 过滤
+│       ├── skill-creator/           # 含路径遍历防护
+│       ├── memory-governance/
+│       └── search_memory/           # routing_key required
+│
+├── shared_hooks/                    # 【v3 新增】加固层（1337 行，零业务代码修改）
+│   ├── hooks.yaml                   # 两段式配置入口（72 行）
+│   ├── structured_log.py            # JSON 事件日志（82 行）
+│   ├── langfuse_trace.py            # Langfuse trace/span/generation 全链路（779 行）
+│   ├── audit_logger.py              # JSONL 审计日志（63 行）
+│   ├── sandbox_guard.py             # 输入消毒：路径穿越/shell/prompt（107 行）
+│   ├── permission_gate.py           # 工具权限 deny/warn/allow（75 行）
+│   ├── cost_guard.py                # 成本围栏 $1 预算（69 行）
+│   ├── loop_detector.py             # 循环检测阈值 3（50 行）
+│   └── retry_tracker.py             # 重试追踪最大 5 次（40 行）
+│
+├── workspace-init/                  # 初始化模板（soul/user/agent/memory.md）
+│
+├── tests/                           # 【v3 大幅扩充】293 用例
+│   ├── unit/                        # 188 用例（shared_hooks 106 + hook_framework 64 + v3_fixes 18）
+│   ├── integration/                 # 40 用例（hook_chain / security_chain / deny_flow 等）
+│   ├── e2e/                         # 65 用例（15 场景 + 2 persona）
+│   └── fixtures/                    # hook_tool_inputs / hook_yaml_samples / security_policy_samples
+│
+├── scripts/                         # 【v2 新增】CI 脚本
+│   ├── verify_trace_coverage.py
+│   ├── verify_pii_masking.py
+│   └── preflight_check.py
+│
+├── .github/
+│   └── workflows/ci.yml             # 【v2 新增】
+├── .pre-commit-config.yaml          # 【v2 新增】
+└── .gitignore                       # config.yaml / .env / data/
 ```
 
 ---
 
-## 4. 模块设计
+## 4. 模块概览
 
-各模块设计详见 [docs/design-modules.md](docs/design-modules.md)。
+> 每个模块详细设计见 [02-modules.md](docs/02-modules.md)。
 
-**模块概览**：
-
-| 模块 | 说明 |
-|------|------|
-| FeishuListener | 维护 WebSocket 长连接，解析飞书事件为 InboundMessage，不负责文件下载 |
-| SessionRouter | 将三种飞书会话类型（p2p/group/thread）映射为统一的 routing_key |
-| Runner | 核心协调层，per-routing_key 串行队列，串联 Session/Agent/存储/发送 |
-| Main Agent + SkillLoaderTool | 极简主 Agent，唯一工具 SkillLoaderTool，渐进式披露 Skills 能力 |
-| Sub-Crew 工厂 | 任务型 Skill 触发时动态构建隔离 Sub-Crew，接入 AIO-Sandbox MCP |
-| CronService | asyncio 精确 timer 调度，mtime 热重载 tasks.json，fake 消息进 Runner |
-| FeishuSender | 按 routing_key 类型选 API，幂等控制（uuid），指数退避重试 |
-| CleanupService | 双触发（启动 + 每日3:00），按策略清理 workspace/traces/sessions |
-| TestAPI | HTTP 接口模拟飞书消息，同步返回 Bot 回复，仅 debug 模式启用 |
-
----
-
-## 5. 数据设计
-
-数据格式详见 [docs/design-data.md](docs/design-data.md)。
-
-**数据层概览**：
-
-| 数据 | 格式 | 说明 |
-|------|------|------|
-| 飞书事件 | SDK 对象 | EventMessage + Sender，由 SDK `lark_oapi` 解析 |
-| InboundMessage | dataclass | 框架内流转的标准化消息，含 routing_key/attachment/is_cron 等 |
-| sessions/index.json | JSON | routing_key → active_session_id + session 列表元数据 |
-| {session_id}.jsonl | JSONL | 清洁对话历史，meta 行 + user/assistant message 行 |
-| traces/{sid}/{ts}_{msg_id}/ | 目录 | meta.json + main.jsonl + skills/*.jsonl，完整 LLM 上下文 |
-| workspace/sessions/{sid}/ | 目录 | uploads/ outputs/ tmp/，挂载进沙盒 |
-| cron/tasks.json | JSON | CronJob 数组，三种 schedule.kind：at/every/cron |
-| SKILL.md | Markdown+YAML | frontmatter（name/description/type/version）+ 执行指令正文 |
-| SkillLoaderTool I/O | Pydantic | SkillLoaderInput（skill_name + task_context）→ SkillResult（errcode/message/data/files）|
-
----
-
-## 6. 接口设计
-
-接口详细说明见 [docs/design-api.md](docs/design-api.md)。
-
-**接口概览**：
-
-| 接口 | 协议 | 说明 |
-|------|------|------|
-| 飞书消息接收 | WebSocket（lark-oapi） | 事件类型 P2ImMessageReceiveV1，无需公网 IP |
-| 飞书消息发送 | REST POST | 单聊/群聊用 CreateMessage，话题群用 ReplyMessage（reply_in_thread=True），uuid 幂等 |
-| 飞书文件下载 | REST GET | `/im/v1/messages/:id/resources/:key?type=image\|file`，写入 session uploads/ |
+| 模块 | v2 变化 | 关键约束 |
+|---|---|---|
+| `FeishuListener` | 加入 webhook 验签 + 入站速率限制 | 每用户每分钟 ≤20 条 |
+| `SessionRouter` | 不变 | 纯函数 |
+| `Runner` | queue_gen counter + `_pending_index_tasks` 托管 | 同 routing_key 串行、不同并行 |
+| `SessionManager` | LRUCache(1000) + `asyncio.to_thread` 流式倒序读 | JSONL append-only，meta 首行 |
+| `MemoryAwareCrew` | `_index_coroutine` 不再自己 `create_task` | `@before_llm_call` hook 保持不变 |
+| `SkillLoaderTool` | MCP tool 白名单 + `asyncio.wait_for` | Skill 超时默认 120s |
+| `memory/bootstrap` | 不变 | memory.md ≤200 行（统一常量） |
+| `memory/context_mgmt` | 压缩 cutoff 保护 tool_calls pair | 45% 触发阈值不变 |
+| `memory/token_counter` | 【v2 新增】Qwen tokenizer 惰性 | Phase 0 校准报告支撑 |
+| `memory/indexer` | `@cache` 单例 client | `async_index_turn` 签名不变 |
+| `FeishuSender` | 真实 429 错误码 + Semaphore | 最大并发 5 |
+| `CronService` | filelock + DLQ + 不推 next_run | 单节点 |
+| `memory-save` Skill | BLOCKED_PATTERNS 过滤 + topic 锁 | 内容长度 ≤2000 |
+| `search_memory` Skill | routing_key required + 校验拒绝 | 不得跨 routing_key 查询 |
+| `/metrics` 服务 | Bearer Token + constant_time_equals | prod 强制启用 |
+| `TestAPI` | Bearer Token + loopback bind | prod 禁用 |
+| `observability/trace` | 【v2 新增】ContextVar + executor helper | 覆盖率 ≥85% |
+| `observability/pii_mask` | 【v2 新增】落盘前 mask 手机/邮箱/身份证 | 所有 user_message 日志 |
+| `observability/security` | 【v2 新增】RateLimiter + memory-save filter | 入口强制 |
+| `hook_framework/registry` | 【v3 新增】HookRegistry（dispatch + dispatch_gate）| handler 异常不扩散（try-except 隔离）|
+| `hook_framework/loader` | 【v3 新增】HookLoader（两层 YAML + deps 注入）| 声明顺序 = 实例化顺序 |
+| `hook_framework/crew_adapter` | 【v3 新增】CrewObservabilityAdapter（4→7 事件映射）| pending_deny 机制绕过 CrewAI 异常吞噬 |
+| `shared_hooks/structured_log` | 【v3 新增】JSON 结构化事件日志 | 零依赖降级（Langfuse 挂了还有日志）|
+| `shared_hooks/langfuse_trace` | 【v3 新增】Langfuse trace/span/generation + batch flush | REST API v4 + span 栈 + auto-close |
+| `shared_hooks/sandbox_guard` | 【v3 新增】正则输入消毒（路径穿越/shell/prompt 注入）| 确定性检测，不依赖 LLM |
+| `shared_hooks/permission_gate` | 【v3 新增】工具权限三级控制 | Deny > Ask > Allow，YAML 声明 |
+| `shared_hooks/cost_guard` | 【v3 新增】成本围栏（$1 预算）| AFTER_TURN 算账 + BEFORE_TOOL_CALL 拦截 |
+| `shared_hooks/loop_detector` | 【v3 新增】循环检测（阈值 3）| MD5 哈希双路径去重 |
+| `shared_hooks/retry_tracker` | 【v3 新增】重试追踪（最大 5 次）| 纯观测不阻断 |
+| `shared_hooks/audit_logger` | 【v3 新增】JSONL 安全审计日志 | SESSION_END 写摘要 |
 
 ---
 
-## 7. MVP Skills 设计
+## 5. 数据概览
 
-### pdf / docx / pptx / xlsx（文件处理）
+> 详细 schema 见 [03-data.md](docs/03-data.md)。
 
-| 项目 | 内容 |
-|------|------|
-| 类型 | 任务型（task） |
-| 核心能力 | PDF 解析与文本提取、Word/PPT/Excel 读取、格式转换 |
-| 沙盒依赖 | `pypdf`, `python-docx`, `python-pptx`, `pandas`, `openpyxl`, `markitdown` |
-| 典型调用 | "帮我把这个 PDF 转成 Word"、"提取这个 Excel 的数据汇总" |
-
-### feishu_ops
-
-| 项目 | 内容 |
-|------|------|
-| 类型 | 任务型（task） |
-| 核心能力 | 读取飞书云文档、向指定群/用户发消息 |
-| 沙盒依赖 | `lark-oapi`，credentials 从 `/workspace/.config/feishu.json` 读取 |
-| 典型调用 | "把这份文档的内容总结发到 HR 群" |
-
-### baidu_search
-
-| 项目 | 内容 |
-|------|------|
-| 类型 | 任务型（task） |
-| 核心能力 | 百度千帆 web_search API 搜索，返回标题/URL/内容摘要 |
-| 沙盒依赖 | `requests`；credentials 从 `/workspace/.config/baidu.json` 读取 |
-| 典型调用 | "搜索最新的 Python asyncio 最佳实践"、"查一下今天有什么科技新闻" |
-| 参数 | `--query`（必填）、`--top_k`（1-50）、`--recency`（week/month/semiyear/year）、`--sites`（限定站点） |
-
-### web_browse
-
-| 项目 | 内容 |
-|------|------|
-| 类型 | 任务型（task） |
-| 核心能力 | 快速 Markdown 提取（静态页面）+ 完整浏览器自动化（动态页面/截图/表单） |
-| 沙盒依赖 | `sandbox_convert_to_markdown`（快速模式）；`browser_*` 系列工具（完整浏览器模式） |
-| 典型调用 | "打开这个 URL 获取内容"、"帮我截图这个页面"、"填写并提交这个表单" |
-| 搜索协作 | 与 baidu_search 配合：先搜索获取 URL，再用 web_browse 获取完整页面内容 |
-
-### scheduler_mgr
-
-| 项目 | 内容 |
-|------|------|
-| 类型 | 任务型（task） |
-| 核心能力 | 解析自然语言意图 → 通过脚本封装生成/更新结构化 Job → 写入 `cron/tasks.json` |
-| 沙盒依赖 | 脚本化架构：Sub-Crew 通过 `sandbox_execute_bash` 调用 `scheduler_mgr/scripts/*.py`，内部 `_tasks_store.py` 负责 tasks.json 读写与字段归一化 |
-| 典型调用 | "每周一早上9点提醒我写周报" |
-| 特殊说明 | **只管配置，不管执行**；执行由框架层 CronService 负责。对于 `cron` 任务，CronService 在每次加载时根据当前 `expr`/`tz` 重新计算 `state.next_run_at_ms`，外部只需关心 schedule 字段，无需手动维护 state。 |
-
-### history_reader
-
-| 项目 | 内容 |
-|------|------|
-| 类型 | 参考型（reference） |
-| 核心能力 | 分页读取历史对话记录，返回操作规范给主 Agent |
-| 沙盒依赖 | 无（reference 型，不启动 Sub-Crew） |
-| 典型调用 | "我上次说要做什么来着？" |
+| 数据 | 位置 | 格式 | 生命周期 |
+|---|---|---|---|
+| Session index | `data/sessions/index.json` | JSON（write-then-rename 原子） | 永久（CleanupService 按策略清理） |
+| Conversation history | `data/sessions/{sid}.jsonl` | JSONL（meta 首行 + 消息） | 180 天后归档冷存储 |
+| ctx snapshot | `data/ctx/{sid}_ctx.json` | JSON（压缩快照） | 随 session 删除 |
+| Raw audit log | `data/ctx/{sid}_raw.jsonl` | JSONL append-only | 30 天 |
+| Traces | `data/traces/{sid}/{ts}_{msg_id}/` | meta.json + main.jsonl + skills/*.jsonl | 30 天 |
+| Cron jobs | `data/cron/tasks.json` | JSON（filelock 保护） | 永久 |
+| Cron DLQ | `data/cron/tasks.dlq.jsonl` | JSONL append-only | 永久（告警触发后人工处理） |
+| pgvector | `memories` 表 | dual-vector + BM25 + tags | 180 天后归档 |
+| Workspace | `data/workspace/sessions/{sid}/` | 用户文件 | 随 session 删除 |
+| Workspace config | `data/workspace/.config/{feishu,baidu}.json` | JSON（mode 0600） | 启动时重写 |
+| Feature flag 状态 | `config.yaml.feature_flags` | YAML | 配置生命周期 |
 
 ---
 
-## 8. 功能特性设计
+## 6. 接口概览
 
-### 8.1 详细模式（Verbose Mode）
+> 详细 API 见 [04-api.md](docs/04-api.md)。
 
-**功能**：启用后，主 Agent 每轮 ReAct 的 Thought 推理过程实时推送给用户。
+| 接口 | 类型 | 鉴权 | 默认可用环境 |
+|---|---|---|---|
+| 飞书 `im.message.receive_v1` webhook | 入站 | 飞书签名 + Allowed chats 白名单 | 所有 |
+| 飞书 `im.chat.member.bot.added_v1` | 入站 | 飞书签名 | 所有 |
+| 飞书 REST（发消息/读文档/表格/日历） | 出站 | App Token | 所有 |
+| TestAPI `POST /api/test/message` | 入站 | Bearer Token + 127.0.0.1 bind | dev（prod 强制关） |
+| TestAPI `POST /api/test/clear` | 入站 | 同上 | dev |
+| `/metrics` | 入站 | Bearer Token + constant_time | 所有（prod 强制 token） |
+| `/health` | 入站 | 无 | 所有（仅返回 200 + git sha） |
+| Qwen API（chat + embedding） | 出站 | API Key | 所有 |
+| 百度千帆 `web_search` | 出站 | API Key | 可选 |
+| pgvector PG 协议 | 出站 | user+password | 所有 |
+| AIO-Sandbox MCP | 出站 | 无（内网） | 所有 |
 
-**适用范围**：单聊（p2p）✅ 群聊（group）✅ 话题群（thread）❌ Sub-Crew ❌
+---
 
-**实现**：通过 CrewAI `step_callback` 拦截 `AgentAction.log`，提取 Thought 内容异步推送飞书。thread 场景下禁用以避免话题污染，Sub-Crew 不注入 step_callback。
+## 7. 并发与锁（v2 核心加固）
 
-**消息格式**：
+> 详细设计见 [05-concurrency.md](docs/05-concurrency.md)。
 
+**v2 锁清单**（所有锁均为**单进程/单节点**粒度）：
+
+| 锁 | 类型 | 保护的资源 | 粒度 | 失败降级 |
+|---|---|---|---|---|
+| `Runner._dispatch_lock` | `asyncio.Lock` | `_queues` / `_workers` / `_queue_gen` 字典修改 | 全局 | 阻塞等待 |
+| `SessionManager._index_lock` | `asyncio.Lock` | `index.json` 读写 | 全局 | 阻塞等待 |
+| `SessionManager._jsonl_locks[sid]` | `asyncio.Lock`（LRU） | `{sid}.jsonl` append | 每 session | 阻塞等待 |
+| `FeishuSender._sem` | `asyncio.Semaphore(5)` | 飞书 API 并发 | 全局 | 等信号量 |
+| Cron tasks.json | `filelock.FileLock` | `tasks.json` 读写 | 单文件 | 超时 10s 报错 |
+| memory-save topic | `filelock.FileLock` | `{topic}.md` 读写 | 每 topic | 超时 10s 报错 |
+
+**task 生命周期**：
+| Task | 持有者 | 回收机制 |
+|---|---|---|
+| Runner worker | `Runner._workers[key]` | idle timeout / 异常 finally 清理（比较 gen） |
+| async_index_turn | `Runner._pending_index_tasks` set | `add_done_callback(self._pending_index_tasks.discard)` |
+| CronService loop | `CronService._main_task` | shutdown 时 `cancel()` + `await` |
+| metrics_server | `AppRunner` | shutdown `cleanup()` |
+
+---
+
+## 8. 可观测性
+
+> 详细见 [06-observability.md](docs/06-observability.md)。
+
+**三大支柱**：
+
+1. **结构化日志**（JSON，含 `trace_id` / `routing_key` / `session_id` / `caller` / `stacktrace`）
+2. **指标**（8 个核心，见下）
+3. **Trace**（ContextVar 贯穿入口 → LLM → Skill → 出站）
+
+**8 个核心指标**：
 ```
-💭 [推理过程]
-用户发来了 PDF 文件，我需要调用 file_processor Skill 进行转换操作。
-输入路径：/workspace/sessions/s-xxx/uploads/report.pdf
+xiaopaw_inbound_total{source, routing_type}          # 入站消息
+xiaopaw_llm_calls_total{model, status}               # LLM 调用
+xiaopaw_agent_latency_seconds                        # 端到端耗时
+xiaopaw_llm_latency_seconds{model}                   # LLM 耗时
+xiaopaw_external_api_retry_total{api}                # 重试次数
+xiaopaw_skill_timeout_total{skill}                   # Skill 超时
+xiaopaw_feishu_rate_limit_total                      # 飞书限流命中
+xiaopaw_cron_dlq_total                               # Cron 死信
 ```
 
-**控制命令**：`/verbose on` | `/verbose off` | `/verbose`（查询状态）
+---
 
-### 8.2 Slash Command 系统
+## 9. 安全设计（v2 新增核心）
 
-所有 Slash Command 在 Runner 层**进入 Agent 之前**拦截处理：
+> 详细威胁模型见 [07-security.md](docs/07-security.md) / [threat-model.md](docs/threat-model.md)。
 
-| 命令 | 处理逻辑 | 回复示例 |
-|------|---------|---------|
-| `/new` | 创建新 Session，更新 active_session_id | "已创建新对话，之前的历史不会带入。" |
-| `/verbose on` | session.verbose = True | "✅ 详细模式已开启，我会把推理过程发给你。" |
-| `/verbose off` | session.verbose = False | "✅ 详细模式已关闭。" |
-| `/verbose` | 查询当前状态 | "当前详细模式：开启/关闭" |
-| `/status` | 返回 session 信息 | "当前对话：s-xxx，已有 8 条消息，详细模式：关闭" |
-| `/help` | 返回命令列表 | 所有命令说明 |
+**7 大威胁**（每条都有对应防御层）：
+
+| 威胁 | 防御 |
+|---|---|
+| T1 Prompt Injection → sandbox 逃逸 | Skill 级 MCP tool 白名单 + sandbox seccomp |
+| T2 Memory Poisoning | memory-save BLOCKED_PATTERNS + H1 三层防护 |
+| T3 飞书 Webhook 伪造 | `encrypt_key` + `verification_token` 验签 + 重放防护 |
+| T4 凭证泄露 | Phase 0 强制轮换 + secret manager + `FORBIDDEN_DEFAULTS` 正则+hash |
+| T5 Sub-Crew 路径遍历 | workspace mount 精确到 `{sid}/` 子目录 + `resolve()` 越界校验 |
+| T6 SKILL.md YAML 注入 | `yaml.safe_load` 强制 + 路径白名单 |
+| T7 DoS（消息洪水） | FeishuListener 入站速率限制（每用户 20/分钟） |
 
 ---
 
-## 9. 安全设计
+## 10. 合规基线（v2 新增）
 
-| 原则 | 实现方式 |
-|------|---------|
-| **Credentials 不进模型** | 启动时从 config.yaml/环境变量读取凭证，写入沙盒 `.config/feishu.json` 和 `.config/baidu.json`；Skill 脚本直接读文件，全程不经过 LLM |
-| **沙盒工具约束** | Sub-Crew 开放全部 AIO-Sandbox MCP 工具（含 browser_* 系列）；通过 Agent backstory 行为约束代替接口级白名单，防止 Agent 误用工具名 |
-| **Session 隔离** | routing_key 精确到 open_id/chat_id/thread_id，不同用户/群聊完全隔离 |
-| **文件目录隔离** | 每个 session 独立工作目录，Sub-Crew 只注入自身 session 路径 |
-| **Bot 回复不走 Skill** | FeishuSender 在 Runner 层直接调用，不经过 Agent/Skill |
-| **幂等发送** | CreateMessage/Reply 均传入 uuid（飞书 message_id），防止网络重试重复发送 |
-| **测试 API 隔离** | `debug.enable_test_api` 默认关闭，绑定 127.0.0.1，生产环境不暴露 |
+> 详细见 [compliance-baseline.md](docs/compliance-baseline.md)。
 
----
-
-## 10. 配置设计
-
-完整配置模板见 `config.yaml.template`。关键配置项：
-
-| 配置节 | 关键字段 | 说明 |
-|-------|---------|------|
-| `workspace` | `id`, `name` | Workspace 唯一标识，多实例时区分 |
-| `feishu` | `app_id`, `app_secret` | 推荐环境变量注入（`${FEISHU_APP_ID}`），不硬编码 |
-| `agent` | `model: qwen3-max`, `max_iter: 50`, `sub_agent_max_iter: 20`, `timeout_s: 300` | 主/Sub-Crew Agent 参数 |
-| `skills` | `global_dir`, `local_dir` | 本地私有 Skills 可覆盖全局 |
-| `sandbox` | `url: http://localhost:8080/mcp`, `timeout_s: 120` | AIO-Sandbox MCP 连接 |
-| `session` | `max_history_turns: 20` | 注入对话历史的最大轮数 |
-| `runner` | `queue_idle_timeout_s: 300`, `max_queue_size: 10` | 队列控制 |
-| `sender` | `max_retries: 3`, `retry_backoff: [1,2,4]` | 发送重试 |
-| `debug` | `enable_test_api: false`, `test_api_port: 9090` | 测试 API，默认关闭，绑定 127.0.0.1 |
+- **PII 脱敏**：日志落盘前正则 mask（手机号 `1x********y`、邮箱 `***@***`、身份证 `xxxxxx********xxxx`）
+- **数据本地化披露**：Qwen API / 百度搜索均为外发，README 明示企业合规评估要求
+- **日志留存**：session JSONL 180 天 → 冷存储；trace 30 天；raw audit 30 天
+- **数据主体权利**：提供导出 / 删除接口（PIPL）
+- **容器非 root**：`USER nobody`
+- **凭证轮换 runbook**：每 90 天 + 事件驱动 + 人员变动
 
 ---
 
-## 11. 运维设计
+## 11. 测试策略
 
-### 11.1 部署架构
+> 详细见 [10-testing.md](docs/10-testing.md)。
 
-```
-主机
-├── xiaopaw/          ← XiaoPaw 主进程（Python）
-│   └── data/         ← 持久化数据（挂载给 Docker）
-└── docker-compose.yml
+**测试分层**（v3 更新，293 用例）：
+- **单元**（188 用例）：shared_hooks 106 + hook_framework 64 + v3_fixes 18
+- **集成**（40 用例）：hook_chain / security_chain / adapter / two_layer_config / deny_flow / trace_quality / deny_observability
+- **E2E**（65 用例 / 15 场景 + 2 persona）：覆盖 L8-L22 + L30-L32 全课程知识点
+- **故障注入**（5 组）：ENOSPC / LLM 5xx / pgvector down / Skill 卡死 / 飞书 429
+- **安全**（含于 E2E + unit）：sandbox_guard 18 用例 / permission_gate 10 用例 / E2E-13~15 安全场景
+- **互斥正确性**（1 组）：100 并发 append 同 sid 无交叉
 
-Docker 容器
-└── aio-sandbox       ← AIO-Sandbox MCP Server
-    └── /workspace    ← 挂载自主机 xiaopaw/data/workspace/
-```
+**覆盖率门**：全局 ≥88%，安全关键模块（sandbox_guard, permission_gate）≥95%，其他核心模块 ≥90%。
 
-**docker-compose.yml 挂载配置**：
+**CI gates**：
+- ruff / black / bandit
+- pytest --cov-fail-under=88
+- 模块级 coverage 按文件 fail-under=90（安全模块 95）
+- trace_id 覆盖率 ≥85%
+- PII mask 验证
+- pip-audit（HIGH fail）
+- 【v3 新增】hook handler 注册完整性检查
+- 【v3 新增】E2E Langfuse trace 质量门
 
+---
+
+## 12. 部署与运维
+
+> 详细见 [08-deployment.md](docs/08-deployment.md)。
+
+**部署形态**：
+- **开发**：`docker compose up` 拉 xiaopaw + pgvector + sandbox 三容器，TestAPI 启用，Bearer Token 从 `.env.dev`
+- **Canary**：Phase 0 就绪的独立环境，跑 72h 内存 baseline 监控
+- **Prod**：单节点，`XIAOPAW_ENV=prod` 触发 `assert_production_safe`，TestAPI 强制关，`/metrics` Bearer Token 必填
+
+**健康检查**：
+- XiaoPaw 主服务：`GET /health` → 200 + git sha
+- pgvector：内置 compose healthcheck
+- AIO-Sandbox：`GET /healthz`（compose 内置）
+
+**升级路径**：
+- 配置变更 → SIGHUP 触发 config reload（feature flags 生效）
+- 代码变更 → 滚动重启（飞书 WebSocket 会重连，队列中消息因 `_dispatch_lock` 不丢失）
+- Schema 变更 → `docs/migration-v1-to-v2.md` 描述每个 migration step
+
+---
+
+## 13. 配置管理
+
+> 详细见 [09-config.md](docs/09-config.md)。
+
+**配置优先级**（高 → 低）：
+1. 命令行参数（`--config path`）
+2. 环境变量（`XIAOPAW_*`）
+3. `config.yaml`（不入库）
+4. `config.yaml.example`（仅作模板）
+
+**凭证分层**（见 [07-security.md](docs/07-security.md)）：
+- 明文 NEVER 进 git（`.env` 在 `.gitignore`）
+- `.env.example` 仅作 key 名清单，**无任何值**
+- 生产通过 secret manager 注入（Vault / K8s Secret / 阿里云 KMS）
+
+**Feature Flags**（见 [09-config.md §Feature Flags](docs/09-config.md)）：
 ```yaml
-services:
-  aio-sandbox:
-    image: ghcr.io/agent-infra/sandbox:latest
-    ports:
-      - "8022:8080"    # Sandbox MCP 端点：http://localhost:8022/mcp
-    volumes:
-      - ./xiaopaw/skills:/mnt/skills:ro
-      - ./data/workspace:/workspace:rw
-      - ./data/cron:/workspace/cron:rw
-    restart: unless-stopped
+feature_flags:
+  token_counter_mode: "qwen_official"       # qwen_official / rough
+  enable_skill_timeout: true                # H2
+  enable_cron_filelock: true                # H8
+  enable_memory_save_filelock: true         # H9
+  enable_feishu_rate_limit_aware: true      # H6
+  enable_trace_id: true                     # 横切
+  enable_mcp_whitelist: true                # T1（教学 demo 可关）
+  enable_memory_save_filter: true           # T2
+  enable_webhook_signature: true            # T3
+  enable_inbound_rate_limit: true           # T7
 ```
 
-### 11.2 存储清理策略
-
-**全量存储一览**：
-
-| 存储位置 | 内容 | 大小特征 | 清理策略 |
-|---------|------|---------|---------|
-| `data/sessions/index.json` | session 路由映射 | 极小（KB） | 永久保留 |
-| `data/sessions/{sid}.jsonl` | 清洁对话历史 | 中（每条约 1KB） | 365 天后删除 |
-| `data/traces/` | 完整执行追踪 | 大（每次 MB 级） | 30 天后删除 |
-| `data/workspace/sessions/*/uploads/` | 用户上传文件 | 大（原始文件大小） | 7 天后删除 |
-| `data/workspace/sessions/*/outputs/` | Skill 产出文件 | 大（产物文件） | 30 天后删除 |
-| `data/workspace/sessions/*/tmp/` | Sub-Crew 临时文件 | 中 | Session 结束立即清理；兜底 1 天 |
-| `data/cron/tasks.json` | 定时任务配置 | 极小 | 永久保留（任务自身 delete_after_run） |
-| `data/workspace/.config/feishu.json` | Credentials | 极小 | 永久保留（随配置更新） |
-| `data/workspace/.config/baidu.json` | Credentials | 极小 | 永久保留（随配置更新） |
-
-**双触发清理**：
-
-```mermaid
-flowchart TD
-    Startup[XiaoPaw 启动] --> Sweep1[立即执行 CleanupService.sweep\n处理异常退出遗留]
-    CronDaily["main.py 内置\n每日 3:00 协程"] --> Sweep2[定时 CleanupService.sweep]
-
-    Sweep1 & Sweep2 --> CLS[CleanupService._sync_sweep]
-
-    CLS --> P1["tmp/ → 1天\n（+session结束时主动清理）"]
-    CLS --> P2["uploads/ → 7天"]
-    CLS --> P3["outputs/ → 30天"]
-    CLS --> P4["traces/ → 30天"]
-    CLS --> P5["sessions/*.jsonl → 365天"]
-
-    style P1 fill:#ffcccc
-    style P2 fill:#ffe0b2
-    style P3 fill:#fff9c4
-    style P4 fill:#fff9c4
-    style P5 fill:#c8e6c9
-```
-
-**session.jsonl 归档**（MVP 直接删除，第22课记忆篇补充）：
-- 进阶：移至 `data/sessions/archive/`，压缩为 `.jsonl.gz`
-- 长远：对话历史 embedding 进向量库后，JSONL 原文件重要性降低，清理策略可更激进
+每个 flag 对应 metric `xiaopaw_feature_flag{name, enabled}`。
 
 ---
 
-## 12. 已确认设计决策
+## 14. 迁移指南
 
-| 编号 | 决策 | 结论 |
-|------|------|------|
-| D-01 | 话题群回复 API | `ReplyMessage` API，`POST /messages/:root_id/reply`，`reply_in_thread=True` |
-| D-02 | AIO-Sandbox workspace 挂载方式 | docker-compose 挂载 `./data/workspace:/workspace`，skills 挂载为 `/mnt/skills`，`.config/feishu.json` 直接可读 |
-| D-03 | Sub-Crew Trace 写入时机 | Sub-Crew 任务结束后，在 `SkillLoaderTool._run()` return 前手动写入 `skills/{name}.jsonl` |
-| D-04 | CronService 依赖 | `croniter` 加入 `requirements.txt` |
-| D-05 | 热重载变更检测 | mtime + 文件大小双重检测，避免高频写入时 mtime 相同导致漏检 |
-| D-06 | 每日清理触发方式 | main.py 内置独立协程（`_daily_cleanup_loop`），精确 sleep 到下一个 3:00，不依赖 CronService |
+> 详细见 [11-migration-v1-to-v2.md](docs/11-migration-v1-to-v2.md)。
+
+**v1 → v2 零停机升级路径**（概要）：
+
+1. **Phase 0 准备**：凭证全部轮换 + canary 就绪 + Tokenizer 校准报告
+2. **蓝绿部署**：v2 服务独立启动 + pgvector schema migration（幂等 `CREATE TABLE IF NOT EXISTS`）
+3. **数据迁移**：workspace / sessions 文件可直接复制（格式兼容）
+4. **切流量**：飞书 WebSocket 一次性切到 v2（短暂重连窗口）
+5. **验收**：72h canary 验证后下线 v1
 
 ---
 
-## 13. 可观测性设计
+## 15. 验收标准（v2 G1-G7）
 
-可观测性详细规范见 [docs/design-observability.md](docs/design-observability.md)。
+> 量化指标均可在 CI/监控中自动验证。详见 [02_重构设计文档 v2 §1](../../../multi-agent/review_L22/02_重构设计文档_xiaopaw-with-memory_v2.md)。
 
-**概览**：
+- **G1** 消除 4 个 Blocker；canary 72h 内存增长斜率 <1MB/h
+- **G2** 10 个 HIGH 缺陷全清；核心模块覆盖 ≥90%
+- **G3** trace_id 覆盖 ≥85%；8 核心指标齐全
+- **G4** 5 种故障注入进程存活 + 恢复后队列继续消费
+- **G5** 单元 ≥720，全局 cov ≥88%，4 失败用例清零
+- **G6** 威胁模型文档完成；Prompt Injection / Memory Poisoning 至少各 1 测试；凭证轮换 runbook 就绪
+- **G7** PII 脱敏覆盖；数据本地化披露；日志留存策略明确；飞书入站速率限制生效
 
-| 子系统 | 说明 |
-|-------|------|
-| 日志 | Python `logging`，双输出：控制台可读格式 + `data/logs/xiaopaw.log` JSON 行日志（滚动 50MB×5）|
-| 日志字段 | 统一字段集：消息维度（routing_key/session_id/feishu_msg_id）+ 飞书维度 + HTTP 维度 + Agent 维度 + 错误维度 |
-| Metrics | `prometheus_client` 暴露 `GET /metrics`，默认 `127.0.0.1:9100` |
-| 指标分类 | 飞书事件流量、HTTP API、Session/Runner 并发、Agent/Sub-Crew 执行（预留）、错误计数 |
-| 联动排查 | `feishu_msg_id` 串联飞书消息 → Runner 日志 → Agent Trace → 回复内容全链路 |
+---
+
+## 16. 文档交叉索引
+
+```
+DESIGN.md（本文）
+ ├── 概述/架构 → 01-architecture.md
+ ├── 模块细节 → 02-modules.md
+ ├── 数据格式 → 03-data.md
+ ├── 接口定义 → 04-api.md
+ ├── 并发锁   → 05-concurrency.md
+ ├── 观测    → 06-observability.md
+ ├── 安全    → 07-security.md ← threat-model.md / secret-rotation-runbook.md
+ ├── 部署    → 08-deployment.md
+ ├── 配置    → 09-config.md
+ ├── 测试    → 10-testing.md
+ ├── 迁移    → 11-migration-v1-to-v2.md
+ ├── Hook加固 → 12-hook-hardening.md       ← 【v3 新增】模块五三层集成
+ ├── 加固测试 → 13-test-design-hook-hardening.md  ← 【v3 新增】136 用例规格
+ ├── E2E设计  → 14-e2e-test-design.md       ← 【v3 新增】15 场景覆盖矩阵
+ ├── E2E修复  → 15-e2e-fix-structured-log-and-timing.md  ← 【v3 新增】
+ └── Trace修复 → langfuse-trace-fix-design.md  ← 【v3 新增】
+
+运维专题:
+ ├── Phase 0   → phase0-checklist.md
+ ├── Tokenizer → tokenizer-calibration.md
+ └── 合规     → compliance-baseline.md
+
+E2E 分析报告（v3 新增）:
+ ├── e2e-05-search-regression-report.md
+ └── e2e-05-langfuse-trace-deep-analysis.md
+```
+
+---
+
+## 17. 文档版本与贡献
+
+- **v3.0**（2026-04-24）：系统加固 — Hook 框架 + shared_hooks 加固层（观测/可靠性/安全）+ 293 测试
+- **v2.1**（2026-04-19）：Phase 0 验证 — 10 个 ADR 修正 + 5 张 SSOT 清单
+- **v2.0-draft**（2026-04-17）：首版发布，基于 v1 review 结论和 v2 重构设计
+- 每次重大变更需同步更新：
+  - 本 DESIGN.md 的摘要
+  - 对应子文档
+  - `11-migration-v1-to-v2.md` 的里程碑
+- 所有代码变更必须有对应设计文档改动（PR 模板检查）
+
+---
+
+**开始使用 v2**：
+1. 阅读本文档 §1–§4 建立整体认知
+2. 依次看 [01-architecture.md](docs/01-architecture.md) → [02-modules.md](docs/02-modules.md) 理解实现
+3. 实施工程师必看 [05-concurrency.md](docs/05-concurrency.md)
+4. 安全 / 运维必看 [07-security.md](docs/07-security.md)
+5. 按 [phase0-checklist.md](docs/phase0-checklist.md) 启动 Phase 0

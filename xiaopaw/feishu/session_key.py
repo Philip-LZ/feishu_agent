@@ -1,23 +1,20 @@
-"""routing_key 解析 — 飞书事件字段映射为统一路由键
-
-路由规则:
-- 单聊: p2p:{open_id}
-- 群聊: group:{chat_id}
-- 话题: thread:{chat_id}:{thread_id}
-"""
+"""Routing key resolution from Feishu events."""
 
 from __future__ import annotations
 
 
 def resolve_routing_key(
     chat_type: str,
-    sender_id: str,
     chat_id: str,
-    thread_id: str | None,
+    open_id: str,
+    thread_id: str = "",
 ) -> str:
-    """将飞书事件字段映射为 routing_key 字符串"""
-    if chat_type == "p2p":
-        return f"p2p:{sender_id}"
     if thread_id:
         return f"thread:{chat_id}:{thread_id}"
+    if chat_type == "p2p":
+        return f"p2p:{open_id}"
     return f"group:{chat_id}"
+
+
+def routing_type(routing_key: str) -> str:
+    return routing_key.split(":")[0] if ":" in routing_key else "unknown"

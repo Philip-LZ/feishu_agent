@@ -1,212 +1,217 @@
-"""XiaoPaw 进程入口
-
-启动顺序：
-1. 加载 config.yaml（飞书配置、agent 参数、sandbox 配置等）
-2. 初始化日志 + Prometheus metrics 服务
-3. 初始化 SessionManager、CleanupService、CronService
-4. 写入飞书凭证到沙盒 workspace/.config/feishu.json（凭证不经过 LLM）
-5. 启动 CleanupService.sweep()（清理历史残留文件）
-6. 构建真实 agent_fn（使用 build_agent_fn 工厂）
-7. 启动 FeishuListener（WebSocket）+ metrics 服务 + 可选 TestAPI
-"""
+"""XiaoPaw v2 entry point."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
+import signal
 from pathlib import Path
 
-import yaml
-from lark_oapi.client import Client, LogLevel
-
-from xiaopaw.agents.main_crew import build_agent_fn
-from xiaopaw.cleanup.service import CleanupService
-from xiaopaw.cron.service import CronService
-from xiaopaw.env import load_dotenv
-from xiaopaw.feishu.downloader import FeishuDownloader
-from xiaopaw.feishu.listener import FeishuListener, run_forever
-from xiaopaw.feishu.sender import FeishuSender
+from xiaopaw.config.safety import assert_all_production_safe
+from xiaopaw.config.validator import load_config
 from xiaopaw.observability.logging_config import setup_logging
-from xiaopaw.observability.metrics_server import start_metrics_server
-from xiaopaw.runner import Runner
-from xiaopaw.session.manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
 
-def _load_config(config_path: Path) -> dict:
-    if not config_path.exists():
-        raise FileNotFoundError(
-            f"config.yaml not found at {config_path}. 请先复制 config.yaml.template 并填写配置。"
-        )
-    data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    return data
+async def main() -> None:
+    config_path = Path(os.environ.get("XIAOPAW_CONFIG", "config.yaml"))
+    cfg = load_config(config_path)
 
+    is_dev = os.environ.get("XIAOPAW_ENV", "dev") == "dev"
+    data_dir = Path(cfg.data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
 
-async def _daily_cleanup_loop(cleanup_svc: CleanupService) -> None:
-    """每日 3:00（Asia/Shanghai）定时清理（独立协程，不依赖 CronService）。"""
-    import datetime
-    import zoneinfo
-
-    _TZ = zoneinfo.ZoneInfo("Asia/Shanghai")
-
-    while True:
-        now = datetime.datetime.now(_TZ)
-        next_run = now.replace(hour=3, minute=0, second=0, microsecond=0)
-        if next_run <= now:
-            next_run += datetime.timedelta(days=1)
-        sleep_s = (next_run - now).total_seconds()
-        await asyncio.sleep(sleep_s)
-        try:
-            await cleanup_svc.sweep()
-        except Exception:  # noqa: BLE001
-            logger.warning("cleanup: daily sweep failed", exc_info=True)
-
-
-async def async_main() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
-    load_dotenv(repo_root / ".env")
-    config_path = repo_root / "config.yaml"
-    cfg = _load_config(config_path)
-
-    # ── 1. 日志初始化 ──────────────────────────────────────────────────────
-    data_dir = Path(cfg.get("data_dir", "./data")).resolve()
-    setup_logging(data_dir / "logs")
-
-    logger.info("XiaoPaw starting. data_dir=%s", data_dir)
-
-    # ── 2. 读取关键配置 ────────────────────────────────────────────────────
-    feishu_cfg = cfg.get("feishu", {})
-    app_id = feishu_cfg.get("app_id", "")
-    app_secret = feishu_cfg.get("app_secret", "")
-    if not app_id or not app_secret:
-        raise RuntimeError(
-            "feishu.app_id / feishu.app_secret 不能为空，请检查 config.yaml"
-        )
-
-    max_history_turns = cfg.get("session", {}).get("max_history_turns", 20)
-    sandbox_url = cfg.get("sandbox", {}).get("url", "http://localhost:8022/mcp")
-
-    debug_cfg = cfg.get("debug", {})
-    enable_test_api = debug_cfg.get("enable_test_api", False)
-    test_api_host = debug_cfg.get("test_api_host", "127.0.0.1")
-    test_api_port = debug_cfg.get("test_api_port", 9090)
-
-    runner_cfg = cfg.get("runner", {})
-    idle_timeout = runner_cfg.get("queue_idle_timeout_s", 300.0)
-
-    # ── 3. 构建 Feishu HTTP Client ─────────────────────────────────────────
-    client = (
-        Client.builder()
-        .app_id(app_id)
-        .app_secret(app_secret)
-        .log_level(LogLevel.INFO)
-        .build()
+    setup_logging(
+        log_dir=data_dir / "logs",
+        json_output=cfg.observability.log_json,
     )
 
-    # ── 4. 初始化核心服务 ───────────────────────────────────────────────────
-    session_mgr = SessionManager(data_dir=data_dir)
-    sender = FeishuSender(client=client)
-    downloader = FeishuDownloader(client=client, data_dir=data_dir)
-    cleanup_svc = CleanupService(data_dir=data_dir)
+    assert_all_production_safe(cfg, is_dev=is_dev)
 
-    # 写入飞书凭证到沙盒 .config 目录（凭证不经过 LLM）
-    cleanup_svc.write_feishu_credentials(app_id=app_id, app_secret=app_secret)
+    # Import after logging is configured
+    from xiaopaw.agents.main_crew import build_agent_fn
+    from xiaopaw.api.capture_sender import CaptureSender
+    from xiaopaw.cleanup.service import CleanupService
+    from xiaopaw.cron.service import CronService
+    from xiaopaw.cron.storage import CronStorage
+    from xiaopaw.hook_framework.loader import HookLoader
+    from xiaopaw.hook_framework.registry import HookRegistry
+    from xiaopaw.observability.metrics_server import start_metrics_server
+    from xiaopaw.observability.security import RateLimiter, ReplayCache
+    from xiaopaw.runner import Runner
+    from xiaopaw.session.manager import SessionManager
 
-    # 写入百度千帆 API Key 到沙盒 .config 目录（支持 baidu_search Skill）
-    baidu_api_key = cfg.get("baidu", {}).get("api_key", "") or os.environ.get("BAIDU_API_KEY", "")
-    cleanup_svc.write_baidu_credentials(api_key=baidu_api_key)
+    session_mgr = SessionManager(
+        data_dir=data_dir,
+        max_active_sessions=cfg.session.max_active_sessions,
+    )
 
-    # 启动时执行一次存储清理（清除历史残留）
-    try:
-        await cleanup_svc.sweep()
-    except Exception:  # noqa: BLE001
-        logger.warning("cleanup: startup sweep failed", exc_info=True)
+    workspace_dir = Path(cfg.workspace)
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    ctx_dir = data_dir / "ctx"
 
-    # ── 5. 构建真实 agent_fn ────────────────────────────────────────────────
+    # Workspace init: copy template files from workspace-init/ if missing (fresh user).
+    # Sandbox gem (UID 1000) needs to write workspace files; root-owned 644 blocks
+    # memory-save → LLM "creatively" writes to alternate path → Skill returns success
+    # but Bootstrap never sees it. Force 0o666 on every startup to prevent this trap.
+    workspace_init_dir = Path(__file__).parent.parent / "workspace-init"
+    if workspace_init_dir.exists():
+        import shutil
+        workspace_dir.chmod(0o777)
+        for src in workspace_init_dir.iterdir():
+            if not src.is_file():
+                continue
+            dest = workspace_dir / src.name
+            if not dest.exists():
+                shutil.copy2(src, dest)
+                logger.info("workspace init: copied %s to workspace", src.name)
+        for f in workspace_dir.glob("*.md"):
+            try:
+                f.chmod(0o666)
+            except OSError as e:
+                logger.warning("workspace chmod 666 failed for %s: %s", f.name, e)
+
+    # Build Feishu sender or capture sender
+    if is_dev and cfg.debug.enable_test_api:
+        sender = CaptureSender()
+    else:
+        import lark_oapi as lark
+        lark_client = lark.Client.builder() \
+            .app_id(cfg.feishu.app_id) \
+            .app_secret(cfg.feishu.app_secret) \
+            .build()
+        from xiaopaw.feishu.sender import FeishuSender
+        sender = FeishuSender(
+            client=lark_client,
+            max_retries=cfg.sender.max_retries,
+            retry_backoff=tuple(cfg.sender.retry_backoff),
+            max_concurrent=cfg.sender.max_concurrent,
+        )
+
     agent_fn = build_agent_fn(
         sender=sender,
-        max_history_turns=max_history_turns,
-        sandbox_url=sandbox_url,
+        workspace_dir=workspace_dir,
+        ctx_dir=ctx_dir,
+        db_dsn=cfg.memory.db_dsn,
+        max_history_turns=cfg.session.max_history_turns,
+        sandbox_url=cfg.sandbox.url,
+        flags=cfg.feature_flags,
     )
 
-    # ── 6. 构建 Runner ──────────────────────────────────────────────────────
+    # Load Hook framework (v3 layer)
+    hook_registry = HookRegistry()
+    hook_loader = HookLoader(hook_registry)
+    shared_hooks_dir = Path(__file__).parent.parent / "shared_hooks"
+    fail_closed = {"sandbox_guard", "permission_gate"}
+    hook_loader.load_two_layers(
+        global_dir=shared_hooks_dir,
+        workspace_dir=workspace_dir,
+        fail_closed_names=fail_closed,
+    )
+    logger.info("hook framework loaded: %s", hook_registry.summary())
+
     runner = Runner(
         session_mgr=session_mgr,
         sender=sender,
         agent_fn=agent_fn,
-        downloader=downloader,
-        idle_timeout=idle_timeout,
+        idle_timeout=cfg.runner.idle_timeout_s,
+        max_queue_size=cfg.runner.max_queue_size,
+        data_dir=data_dir,
+        hook_registry=hook_registry,
     )
 
-    # ── 7. CronService ──────────────────────────────────────────────────────
-    (data_dir / "cron").mkdir(parents=True, exist_ok=True)
-    cron_svc = CronService(data_dir=data_dir, dispatch_fn=runner.dispatch)
-    await cron_svc.start()
-
-    # ── 8. WebSocket Listener ───────────────────────────────────────────────
-    loop = asyncio.get_running_loop()
-    allowed_chats: list[str] = feishu_cfg.get("allowed_chats", []) or []
-    listener = FeishuListener(
-        app_id=app_id,
-        app_secret=app_secret,
-        on_message=runner.dispatch,
-        loop=loop,
-        allowed_chats=allowed_chats if allowed_chats else None,
-        # TODO: 实现 on_bot_added — 向新群发送欢迎卡片
-        # on_bot_added=lambda chat_id, name: sender.send_welcome_card(chat_id, name),
-        on_bot_added=None,
+    # Start metrics server
+    metrics_runner = await start_metrics_server(
+        host=cfg.observability.metrics_host,
+        port=cfg.observability.metrics_port,
     )
 
-    logger.info("XiaoPaw ready. sandbox_url=%s, test_api=%s", sandbox_url, enable_test_api)
+    # Start cron service
+    cron_storage = CronStorage(data_dir=data_dir, filelock_timeout=cfg.cron.filelock_timeout_s)
+    cron_svc = CronService(
+        storage=cron_storage,
+        dispatch_fn=runner.dispatch,
+        check_interval=cfg.cron.check_interval_s,
+    )
+    if cfg.cron.enabled:
+        await cron_svc.start()
 
-    # ── 9. 并行启动所有服务 ─────────────────────────────────────────────────
-    tasks = [
-        asyncio.create_task(run_forever(listener), name="feishu-listener"),
-        asyncio.create_task(
-            start_metrics_server(host="127.0.0.1", port=9100),
-            name="metrics-server",
-        ),
-        asyncio.create_task(
-            _daily_cleanup_loop(cleanup_svc),
-            name="cleanup-scheduler",
-        ),
-    ]
+    # Start cleanup service
+    cleanup_svc = CleanupService(
+        data_dir=data_dir,
+        session_ttl_days=cfg.cleanup.session_ttl_days,
+        trace_ttl_days=cfg.cleanup.trace_ttl_days,
+        raw_ttl_days=cfg.cleanup.raw_ttl_days,
+        run_hour_utc=cfg.cleanup.run_hour_utc,
+    )
+    if cfg.cleanup.enabled:
+        await cleanup_svc.start()
 
-    if enable_test_api:
-        from xiaopaw.api.test_server import create_test_app  # noqa: PLC0415
-
-        test_app = create_test_app(runner=runner, session_mgr=session_mgr)
-        tasks.append(
-            asyncio.create_task(
-                _run_test_api(test_app, host=test_api_host, port=test_api_port),
-                name="test-api",
-            )
+    # Start TestAPI (dev only)
+    test_api_runner = None
+    if is_dev and cfg.debug.enable_test_api:
+        from aiohttp import web
+        from xiaopaw.api.test_server import create_test_app
+        test_app = create_test_app(
+            runner=runner,
+            sender=sender,
+            session_mgr=session_mgr,
+            token=cfg.debug.test_api_token,
         )
-        logger.info("TestAPI enabled: http://%s:%d", test_api_host, test_api_port)
+        test_api_runner = web.AppRunner(test_app)
+        await test_api_runner.setup()
+        site = web.TCPSite(
+            test_api_runner, cfg.debug.test_api_host, cfg.debug.test_api_port
+        )
+        await site.start()
+        logger.info(
+            "TestAPI listening on %s:%d",
+            cfg.debug.test_api_host, cfg.debug.test_api_port,
+        )
 
-    await asyncio.gather(*tasks)
+    # Start Feishu listener (production)
+    feishu_listener = None
+    if not (is_dev and cfg.debug.enable_test_api):
+        from xiaopaw.feishu.listener import FeishuListener
+        replay_cache = ReplayCache(
+            maxsize=cfg.replay_cache.maxsize, ttl_sec=cfg.replay_cache.ttl_sec
+        )
+        rate_limiter = RateLimiter(per_user_per_minute=cfg.rate_limit.per_user_per_minute)
+        feishu_listener = FeishuListener(
+            app_id=cfg.feishu.app_id,
+            app_secret=cfg.feishu.app_secret,
+            on_message=runner.dispatch,
+            replay_cache=replay_cache,
+            rate_limiter=rate_limiter,
+            allowed_chats=cfg.feishu.allowed_chats or None,
+        )
+        await feishu_listener.start()
 
+    logger.info("XiaoPaw v2 started (env=%s)", "dev" if is_dev else "production")
 
-async def _run_test_api(app: object, host: str, port: int) -> None:
-    """启动 aiohttp Test API Server。"""
-    from aiohttp import web  # noqa: PLC0415
+    # Wait for shutdown signal
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
 
-    app_runner = web.AppRunner(app)
-    await app_runner.setup()
-    site = web.TCPSite(app_runner, host=host, port=port)
-    await site.start()
-    logger.info("TestAPI listening on http://%s:%d", host, port)
-    try:
-        await asyncio.Event().wait()
-    finally:
-        await app_runner.cleanup()
+    await stop.wait()
+    logger.info("shutdown signal received")
 
+    # Graceful shutdown
+    if feishu_listener:
+        await feishu_listener.stop()
+    await cron_svc.stop()
+    await cleanup_svc.stop()
+    await runner.shutdown()
+    if test_api_runner:
+        await test_api_runner.cleanup()
+    await metrics_runner.cleanup()
 
-def main() -> None:
-    asyncio.run(async_main())
+    logger.info("XiaoPaw v2 shutdown complete")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -1,267 +1,334 @@
-"""Runner — 执行引擎：per-routing_key 串行队列、Slash Command、Agent 调度
+"""Runner: per-routing_key serial queue with gen-counter worker lifecycle.
 
-并发控制:
-- 同一 routing_key 的消息串行处理（per-routing_key asyncio.Queue + worker）
-- 不同 routing_key 之间并行
-- worker 空闲超时后自动退出，释放内存
-- _dispatch_lock 保护 queue/worker 的创建与清理，避免边界竞态
+v3 integration: Hook framework fires 5+2 events around agent execution.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
+from pathlib import Path
 
+from xiaopaw.feishu.session_key import routing_type
+from xiaopaw.hook_framework.crew_adapter import CrewObservabilityAdapter, set_current_adapter
+from xiaopaw.hook_framework.registry import EventType, GuardrailDeny, HookContext, HookRegistry
 from xiaopaw.models import InboundMessage, SenderProtocol
+from xiaopaw.observability.metrics import agent_latency, inbound_total
+from xiaopaw.observability.trace import bind_trace_id
 from xiaopaw.session.manager import SessionManager
 from xiaopaw.session.models import MessageEntry
-from xiaopaw.observability.metrics import (
-    runner_workers_active,
-    runner_queue_size,
-    routing_key_type,
-    record_error,
-)
-
-if TYPE_CHECKING:
-    from xiaopaw.feishu.downloader import FeishuDownloader
 
 logger = logging.getLogger(__name__)
 
-AgentFn = Callable[[str, list[MessageEntry], str, str, str, bool], Awaitable[str]]
-# 参数依次: user_message, history, session_id, routing_key, root_id, verbose
+AgentFn = Callable[
+    [str, list[MessageEntry], str, str, bool],
+    Awaitable[str],
+]
 
-
-_HELP_TEXT = """\
-可用命令：
-/new — 创建新对话（清除历史上下文）
-/verbose on|off — 开启/关闭详细模式（显示推理过程）
-/verbose — 查询当前详细模式状态
-/status — 查看当前对话信息
-/help — 显示本帮助"""
-
-_SLASH_COMMANDS = frozenset({"/new", "/verbose", "/help", "/status"})
-
-
-def _build_attachment_message(sandbox_path: str, original_text: str) -> str:
-    """构造附件下载成功后传给 Agent 的模板消息"""
-    msg = (
-        f"用户发来了文件，已自动保存至沙盒路径：\n`{sandbox_path}`\n"
-        "请根据文件内容和用户意图完成相应处理。"
-    )
-    if original_text.strip():
-        msg += f"\n用户备注：{original_text}"
-    return msg
+_SLASH_COMMANDS = {"/new", "/help", "/status", "/verbose"}
 
 
 class Runner:
-    """执行引擎：per-routing_key 串行队列 + Slash Command + Agent 调度"""
-
     def __init__(
         self,
         session_mgr: SessionManager,
         sender: SenderProtocol,
-        agent_fn: AgentFn | None = None,
+        agent_fn: AgentFn,
         idle_timeout: float = 300.0,
-        downloader: FeishuDownloader | None = None,
+        max_queue_size: int = 10,
+        data_dir: Path | None = None,
+        hook_registry: HookRegistry | None = None,
     ) -> None:
         self._session_mgr = session_mgr
         self._sender = sender
-        self._agent_fn = agent_fn or self._default_agent_fn
+        self._agent_fn = agent_fn
         self._idle_timeout = idle_timeout
-        self._downloader = downloader
-        self._queues: dict[str, asyncio.Queue[InboundMessage]] = {}
-        self._workers: dict[str, asyncio.Task[None]] = {}
-        self._dispatch_lock = asyncio.Lock()
+        self._max_queue_size = max_queue_size
+        self._data_dir = data_dir or Path("data")
 
-    # ── 公开方法 ───────────────────────────────────────────────
+        self._hook_registry = hook_registry
+
+        self._queues: dict[str, asyncio.Queue[InboundMessage]] = {}
+        self._workers: dict[str, asyncio.Task] = {}
+        self._queue_gen: dict[str, int] = {}
+        self._dispatch_lock = asyncio.Lock()
+        self._pending_index_tasks: set[asyncio.Task] = set()
+        self._shutting_down = False
 
     async def dispatch(self, inbound: InboundMessage) -> None:
-        """外部入口：消息入队，确保同一会话串行执行"""
-        key = inbound.routing_key
-        async with self._dispatch_lock:
-            if key not in self._queues:
-                self._queues[key] = asyncio.Queue()
-                self._workers[key] = asyncio.create_task(self._worker(key))
-                rk_type = routing_key_type(key)
-                runner_workers_active.labels(routing_key_type=rk_type).inc()
-        await self._queues[key].put(inbound)
-        rk_type = routing_key_type(key)
-        runner_queue_size.labels(routing_key_type=rk_type).set(
-            self._queues[key].qsize()
-        )
-
-    async def shutdown(self) -> None:
-        """取消所有 worker，释放资源"""
-        for key, queue in self._queues.items():
-            if not queue.empty():
-                logger.warning(
-                    "[%s] shutting down with %d unprocessed messages",
-                    key,
-                    queue.qsize(),
-                )
-        for task in list(self._workers.values()):
-            task.cancel()
-        if self._workers:
-            await asyncio.gather(*self._workers.values(), return_exceptions=True)
-        self._workers.clear()
-        self._queues.clear()
-
-    # ── Worker ────────────────────────────────────────────────
-
-    async def _worker(self, key: str) -> None:
-        """per-routing_key worker：逐条消费队列，空闲超时后退出"""
-        queue = self._queues[key]
-        while True:
-            try:
-                inbound = await asyncio.wait_for(
-                    queue.get(), timeout=self._idle_timeout
-                )
-            except asyncio.TimeoutError:
-                async with self._dispatch_lock:
-                    # 仅当自己仍是该 key 的 worker 时才清理
-                    if self._workers.get(key) is asyncio.current_task():
-                        self._queues.pop(key, None)
-                        self._workers.pop(key, None)
-                        rk_type = routing_key_type(key)
-                        runner_workers_active.labels(
-                            routing_key_type=rk_type
-                        ).dec()
-                return
-            try:
-                await self._handle(inbound)
-            except Exception:
-                logger.exception("[%s] handle error", key)
-                record_error("runner", "handle_error")
-                try:
-                    await self._sender.send(
-                        key, "处理出错，请稍后重试。", inbound.root_id
-                    )
-                except Exception:
-                    logger.exception("[%s] failed to send error message", key)
-                    record_error("runner", "send_error_message_failed")
-            finally:
-                queue.task_done()
-
-    # ── Handle ────────────────────────────────────────────────
-
-    async def _handle(self, inbound: InboundMessage) -> None:
-        """处理单条消息：slash 拦截 → session → agent → append → send"""
-        key = inbound.routing_key
-
-        # 1. Slash Command 拦截（不进入 Agent，不写历史）
-        slash_reply = await self._handle_slash(inbound)
-        if slash_reply is not None:
-            await self._sender.send_text(key, slash_reply, inbound.root_id)
+        if self._shutting_down:
+            logger.warning("dispatch rejected (shutting down): %s", inbound.routing_key)
             return
 
-        # 2. 动态解析当前 active session
-        session = await self._session_mgr.get_or_create(key)
+        async with self._dispatch_lock:
+            key = inbound.routing_key
+            if key not in self._queues:
+                self._queues[key] = asyncio.Queue(maxsize=self._max_queue_size)
+                self._queue_gen[key] = 0
 
-        # 3. 附件下载
-        user_content = inbound.content
-        if inbound.attachment and self._downloader:
-            sandbox_path = (
-                f"/workspace/sessions/{session.id}/uploads/"
-                f"{inbound.attachment.file_name}"
-            )
-            local_path = await self._downloader.download(
-                inbound.msg_id, inbound.attachment, session.id
-            )
-            if local_path is not None:
-                user_content = _build_attachment_message(
-                    sandbox_path=sandbox_path,
-                    original_text=inbound.content,
+            q = self._queues[key]
+            if q.full():
+                logger.warning("queue full for %s, dropping message", key)
+                return
+
+            await q.put(inbound)
+
+            if key not in self._workers or self._workers[key].done():
+                self._queue_gen[key] += 1
+                gen = self._queue_gen[key]
+                self._workers[key] = asyncio.create_task(
+                    self._worker(key, gen), name=f"worker-{key}"
                 )
+
+    async def _worker(self, key: str, gen: int) -> None:
+        logger.info("worker started: %s (gen=%d)", key, gen)
+        try:
+            while True:
+                try:
+                    inbound = await asyncio.wait_for(
+                        self._queues[key].get(), timeout=self._idle_timeout
+                    )
+                except asyncio.TimeoutError:
+                    break
+
+                await self._handle(inbound)
+
+        except Exception:
+            logger.exception("worker error: %s", key)
+        finally:
+            if self._queue_gen.get(key) == gen:
+                self._workers.pop(key, None)
+                self._queues.pop(key, None)
+                self._queue_gen.pop(key, None)
+                logger.info("worker exited: %s (gen=%d, cleaned up)", key, gen)
             else:
-                user_content = f"[附件下载失败] {inbound.content}".strip()
+                logger.info("worker exited: %s (gen=%d, superseded)", key, gen)
 
-        # 4. 加载对话历史
-        history = await self._session_mgr.load_history(session.id)
+    async def _handle(self, inbound: InboundMessage) -> None:
+        token = bind_trace_id(inbound.trace_id)
+        start = time.monotonic()
+        key = inbound.routing_key
 
-        # 5. 发送 Loading 卡片（send_thinking），获取 card_msg_id
-        card_msg_id = await self._sender.send_thinking(key, inbound.root_id)
+        adapter: CrewObservabilityAdapter | None = None
+        card_msg_id: str | None = None
+        try:
+            # Slash command intercept
+            cmd = inbound.content.strip().split()[0].lower() if inbound.content.strip() else ""
+            if cmd in _SLASH_COMMANDS:
+                reply = await self._handle_slash(cmd, inbound)
+                await self._sender.send(key, reply)
+                return
 
-        # 6. 执行 Agent
-        reply = await self._agent_fn(
-            user_content, history, session.id,
-            inbound.routing_key, inbound.root_id, session.verbose,
-        )
+            # Get or create session
+            session = await self._session_mgr.get_or_create(key)
 
-        # 7. 写入 session 历史
-        await self._session_mgr.append(
-            session.id,
-            user=user_content,
-            feishu_msg_id=inbound.msg_id,
-            assistant=reply,
-        )
+            # ★ L33 接线点 1：为本次请求创建 Hook adapter（每请求一个，session_id 绑定）
+            # adapter 在本函数内通过 ContextVar 传递给 main_crew、skill_loader、sub-crew
+            if self._hook_registry:
+                adapter = CrewObservabilityAdapter(
+                    registry=self._hook_registry,
+                    session_id=session.id,
+                )
 
-        # 8. 发送回复：优先更新卡片，失败时降级为 send()
-        if card_msg_id:
-            await self._sender.update_card(card_msg_id, reply)
-        else:
-            await self._sender.send(key, reply, inbound.root_id)
+            # Hook: BEFORE_TURN —— 触发 structured_log + langfuse_trace 创建 trace
+            if adapter:
+                adapter.on_turn_start(
+                    user_message=inbound.content,
+                    sender_id=inbound.sender_id,
+                )
 
-    # ── Slash Command ─────────────────────────────────────────
+            # Load history
+            history = await self._session_mgr.load_history(session.id)
 
-    async def _handle_slash(self, inbound: InboundMessage) -> str | None:
-        """处理 slash command，返回回复文本；非 slash command 返回 None"""
-        text = inbound.content.strip()
-        if not text.startswith("/"):
-            return None
+            # Send thinking indicator, save card_msg_id for later update
+            card_msg_id = await self._sender.send_thinking(key)
 
-        parts = text.split(maxsplit=1)
-        cmd = parts[0].lower()
-        arg = parts[1].strip().lower() if len(parts) > 1 else ""
+            # ★ L33 接线点 2：pre-flight 安全检查
+            # 把整个 Agent 执行包成一个虚拟工具调用 "agent_execution"，
+            # 让 sandbox_guard / permission_gate 对用户原始输入提前过一遍 ——
+            # 否则恶意 prompt 要等到 LLM 决定调真实工具时才会被拦截，浪费 LLM 算力。
+            #
+            # 因为 BEFORE_TOOL_CALL 抛 GuardrailDeny 会被 adapter 的 pending_deny 吞掉
+            # （pending_deny 模式见 crew_adapter），这里手动检查并立即重抛，
+            # 让外层的 except GuardrailDeny 捕获并向用户回复"安全策略拦截"。
+            if adapter:
+                adapter.on_before_tool_call(
+                    tool_name="agent_execution",
+                    tool_input={"content": inbound.content[:500]},
+                )
+                if adapter._pending_deny:
+                    pending = adapter._pending_deny
+                    adapter._pending_deny = None
+                    raise pending
 
-        if cmd not in _SLASH_COMMANDS:
-            return None
+            # Run agent (with adapter available via ContextVar for internal crew hooks)
+            adapter_token = set_current_adapter(adapter) if adapter else None
+            try:
+                reply = await self._agent_fn(
+                    inbound.content,
+                    history,
+                    session.id,
+                    key,
+                    session.verbose,
+                )
+            finally:
+                if adapter_token is not None:
+                    set_current_adapter(None)
 
+            # Hook: AFTER_TOOL_CALL for the agent execution
+            if adapter:
+                adapter.on_after_tool_call(
+                    tool_name="agent_execution",
+                    tool_input={"content": inbound.content[:500]},
+                    tool_result=reply[:500],
+                )
+
+            # Send reply: update the thinking card if available, else send new card
+            if card_msg_id:
+                await self._sender.update_card(card_msg_id, reply)
+            else:
+                await self._sender.send(key, reply)
+
+            # Persist conversation
+            await self._session_mgr.append(
+                session.id,
+                user=inbound.content,
+                feishu_msg_id=inbound.msg_id,
+                assistant=reply,
+                ts=inbound.ts,
+            )
+
+            elapsed = time.monotonic() - start
+            agent_latency.labels(routing_type=routing_type(key)).observe(elapsed)
+
+            # Hook: AFTER_TURN
+            if adapter and self._hook_registry:
+                self._hook_registry.dispatch(
+                    EventType.AFTER_TURN,
+                    HookContext(
+                        event_type=EventType.AFTER_TURN,
+                        session_id=session.id,
+                        sender_id=inbound.sender_id,
+                        duration_ms=elapsed * 1000,
+                        metadata={
+                            "user_message": inbound.content[:500],
+                            "reply": reply[:500],
+                        },
+                    ),
+                )
+
+        except GuardrailDeny as deny:
+            # ★ L33 接线点 3：兜底捕获 GuardrailDeny —— 友好告知用户而不是 500 错误
+            # GuardrailDeny 的来源有三处：
+            #   1. pre-flight 检查（上面的 raise pending）
+            #   2. main_crew 内部 step_callback / task_callback 重抛
+            #   3. cleanup() 时的 SESSION_END handler
+            elapsed = time.monotonic() - start
+            logger.warning("guardrail deny for %s: %s", key, deny)
+            deny_reply = f"安全策略拦截：{deny.detail or deny.reason_code}"
+
+            if adapter and self._hook_registry:
+                self._hook_registry.dispatch(
+                    EventType.AFTER_TURN,
+                    HookContext(
+                        event_type=EventType.AFTER_TURN,
+                        session_id=adapter._session_id,
+                        sender_id=inbound.sender_id,
+                        duration_ms=elapsed * 1000,
+                        metadata={
+                            "user_message": inbound.content[:500],
+                            "reply": deny_reply,
+                            "guardrail_deny": True,
+                            "deny_reason": deny.reason_code,
+                            "deny_detail": deny.detail,
+                        },
+                    ),
+                )
+
+            try:
+                if card_msg_id:
+                    await self._sender.update_card(card_msg_id, deny_reply)
+                else:
+                    await self._sender.send_text(key, deny_reply)
+            except Exception:
+                pass
+        except Exception:
+            logger.exception("handle error for %s", key)
+            error_reply = "抱歉，处理消息时出现了错误，请稍后重试。"
+            try:
+                if card_msg_id:
+                    await self._sender.update_card(card_msg_id, error_reply)
+                else:
+                    await self._sender.send_text(key, error_reply)
+            except Exception:
+                pass
+        finally:
+            # ★ L33 接线点 4：finally 触发 SESSION_END
+            # adapter.cleanup() 内部 dispatch SESSION_END → 触发：
+            #   - audit_logger.session_end_handler（写本会话安全摘要）
+            #   - langfuse_trace.flush_and_close（强制 flush，机制五）
+            # 必须在 finally 里 —— 即使 except 分支已经 send 了回复给用户，
+            # 我们仍要保证 Langfuse 数据落盘
+            if adapter:
+                try:
+                    adapter.cleanup()
+                except GuardrailDeny:
+                    # cleanup 也可能抛 deny（pending_deny 重抛），但用户已经收到回复
+                    # 这里的 deny 只用于 audit/log，吞掉即可
+                    pass
+            bind_trace_id("-")
+
+    async def _handle_slash(self, cmd: str, inbound: InboundMessage) -> str:
         key = inbound.routing_key
 
         if cmd == "/new":
-            new_session = await self._session_mgr.create_new_session(key)
-            return f"已创建新对话 {new_session.id}，之前的历史不会带入。"
-
-        if cmd == "/verbose":
-            if arg == "on":
-                await self._session_mgr.get_or_create(key)
-                await self._session_mgr.update_verbose(key, True)
-                return "详细模式已开启，我会把推理过程发给你。"
-            if arg == "off":
-                await self._session_mgr.get_or_create(key)
-                await self._session_mgr.update_verbose(key, False)
-                return "详细模式已关闭。"
-            # 查询当前状态
-            session = await self._session_mgr.get_or_create(key)
-            status = "开启" if session.verbose else "关闭"
-            return f"当前详细模式：{status}"
+            session = await self._session_mgr.create_new_session(key)
+            return f"已创建新会话 {session.id}"
 
         if cmd == "/help":
-            return _HELP_TEXT
-
-        if cmd == "/status":
-            session = await self._session_mgr.get_or_create(key)
-            verbose_str = "开启" if session.verbose else "关闭"
             return (
-                f"当前对话：{session.id}\n"
-                f"消息数：{session.message_count}\n"
-                f"详细模式：{verbose_str}"
+                "可用命令：\n"
+                "  /new — 创建新会话\n"
+                "  /status — 查看当前会话状态\n"
+                "  /verbose on|off — 开关详细模式\n"
+                "  /help — 显示此帮助"
             )
 
-        return None  # pragma: no cover
+        if cmd == "/status":
+            session_info = self._session_mgr.get_session_info(key)
+            if session_info:
+                return (
+                    f"会话 ID: {session_info.id}\n"
+                    f"创建时间: {session_info.created_at}\n"
+                    f"消息数: {session_info.message_count}\n"
+                    f"详细模式: {'开启' if session_info.verbose else '关闭'}"
+                )
+            return "当前无活动会话"
 
-    # ── Default Agent ─────────────────────────────────────────
+        if cmd == "/verbose":
+            parts = inbound.content.strip().split()
+            on = parts[1].lower() in ("on", "1", "true") if len(parts) > 1 else True
+            await self._session_mgr.update_verbose(key, on)
+            return f"详细模式已{'开启' if on else '关闭'}"
 
-    @staticmethod
-    async def _default_agent_fn(
-        user_message: str,
-        history: list[MessageEntry],
-        session_id: str,
-        routing_key: str = "",
-        root_id: str = "",
-        verbose: bool = False,
-    ) -> str:
-        """默认 agent（未注入时使用），后续替换为 CrewAI"""
-        raise NotImplementedError("agent_fn not configured")
+        return f"未知命令: {cmd}"
+
+    async def shutdown(self) -> None:
+        self._shutting_down = True
+        logger.info("runner shutting down...")
+
+        for task in self._workers.values():
+            task.cancel()
+        if self._workers:
+            await asyncio.gather(*self._workers.values(), return_exceptions=True)
+
+        for task in self._pending_index_tasks:
+            task.cancel()
+        if self._pending_index_tasks:
+            await asyncio.gather(*self._pending_index_tasks, return_exceptions=True)
+
+        self._workers.clear()
+        self._queues.clear()
+        logger.info("runner shutdown complete")

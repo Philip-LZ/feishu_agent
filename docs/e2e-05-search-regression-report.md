@@ -29,7 +29,7 @@ routing_key: p2p:ou_search
 │  ┌──────────────────────────────────────────────────────────────┐   │
 │  │ Layer 2: Main Crew (agent_execution, 179.2s)                 │   │
 │  │                                                              │   │
-│  │  ① llm-call-1 [GENERATION] qwen3-max  (4.6s)               │   │
+│  │  ① llm-call-1 [GENERATION] ZHIPU/GLM-5.3-Flash  (4.6s)               │   │
 │  │     → 识别意图: 需要搜索能力                                │   │
 │  │     → 决策: 调用 skill_loader(baidu_search)                 │   │
 │  │                                                              │   │
@@ -37,13 +37,13 @@ routing_key: p2p:ou_search
 │  │  │ Layer 3: Sub-Crew via SkillLoaderTool (174.8s)        │   │   │
 │  │  │ skill_name=baidu_search                               │   │   │
 │  │  │                                                       │   │   │
-│  │  │  ② llm-call-2 [GENERATION] qwen3-max  (5.6s)        │   │   │
+│  │  │  ② llm-call-2 [GENERATION] ZHIPU/GLM-5.3-Flash  (5.6s)        │   │   │
 │  │  │     → 决策: 先创建输出目录                            │   │   │
 │  │  │                                                       │   │   │
 │  │  │  ③ tool: sandbox_execute_bash  (0.8s)                │   │   │
 │  │  │     cmd: mkdir -p /workspace/.../outputs              │   │   │
 │  │  │                                                       │   │   │
-│  │  │  ④ llm-call-3 [GENERATION] qwen3-max  (6.7s)        │   │   │
+│  │  │  ④ llm-call-3 [GENERATION] ZHIPU/GLM-5.3-Flash  (6.7s)        │   │   │
 │  │  │     → 决策: 执行百度搜索脚本                          │   │   │
 │  │  │                                                       │   │   │
 │  │  │  ⑤ tool: sandbox_execute_bash  (2.9s)                │   │   │
@@ -51,34 +51,34 @@ routing_key: p2p:ou_search
 │  │  │          python search.py --query "Python 3.13 新特性" │   │   │
 │  │  │          --top_k 20                                    │   │   │
 │  │  │                                                       │   │   │
-│  │  │  ⑥ llm-call-4 [GENERATION] qwen3-max  (131.2s) ⚠️   │   │   │
+│  │  │  ⑥ llm-call-4 [GENERATION] ZHIPU/GLM-5.3-Flash  (131.2s) ⚠️   │   │   │
 │  │  │     → 处理搜索结果（17条）                            │   │   │
 │  │  │     → 决策: 保存 JSON 结果到文件                      │   │   │
 │  │  │                                                       │   │   │
 │  │  │  ⑦ tool: sandbox_file_operations  (0.2s)             │   │   │
 │  │  │     action: write search_result.json                  │   │   │
 │  │  │                                                       │   │   │
-│  │  │  ⑧ llm-call-5 [GENERATION] qwen3-max  (8.2s)        │   │   │
+│  │  │  ⑧ llm-call-5 [GENERATION] ZHIPU/GLM-5.3-Flash  (8.2s)        │   │   │
 │  │  │     → 决策: 再次搜索并重定向输出                      │   │   │
 │  │  │                                                       │   │   │
 │  │  │  ⑨ tool: sandbox_execute_bash  (2.9s)                │   │   │
 │  │  │     cmd: search.py --query "Python 3.13 新特性"       │   │   │
 │  │  │          --top_k 20 > .../search_result_raw.json      │   │   │
 │  │  │                                                       │   │   │
-│  │  │  ⑩ llm-call-6 [GENERATION] qwen3-max  (6.5s)        │   │   │
+│  │  │  ⑩ llm-call-6 [GENERATION] ZHIPU/GLM-5.3-Flash  (6.5s)        │   │   │
 │  │  │     → 决策: 读取保存的原始结果                        │   │   │
 │  │  │                                                       │   │   │
 │  │  │  ⑪ tool: sandbox_file_operations  (0.2s)             │   │   │
 │  │  │     action: read search_result_raw.json               │   │   │
 │  │  │                                                       │   │   │
-│  │  │  ⑫ llm-call-7 [GENERATION] qwen3-max  (5.0s)        │   │   │
+│  │  │  ⑫ llm-call-7 [GENERATION] ZHIPU/GLM-5.3-Flash  (5.0s)        │   │   │
 │  │  │     → 判定: 搜索任务完成                              │   │   │
 │  │  │                                                       │   │   │
 │  │  │  ⑬ tool: final_answer  (0.0s)                        │   │   │
 │  │  │     → Sub-Crew 返回: "搜索任务成功完成"               │   │   │
 │  │  └───────────────────────────────────────────────────────┘   │   │
 │  │                                                              │   │
-│  │  ⑭ llm-call-1 [GENERATION] qwen3-max  (10.7s)              │   │
+│  │  ⑭ llm-call-1 [GENERATION] ZHIPU/GLM-5.3-Flash  (10.7s)              │   │
 │  │     → 综合 Sub-Crew 搜索结果，生成用户友好回复             │   │
 │  │                                                              │   │
 │  │  ⑮ tool: final_answer  (0.0s)                               │   │

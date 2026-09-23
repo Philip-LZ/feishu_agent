@@ -816,7 +816,7 @@ CREATE TABLE IF NOT EXISTS memories (
     user_message    TEXT        NOT NULL,
     assistant_reply TEXT        NOT NULL,
 
-    summary         TEXT        NOT NULL,              -- qwen3-max 提取的一句话摘要
+    summary         TEXT        NOT NULL,              -- ZHIPU/GLM-5.3-Flash 提取的一句话摘要
     tags            TEXT[]      NOT NULL DEFAULT '{}',
 
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),

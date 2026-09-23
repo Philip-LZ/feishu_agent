@@ -55,7 +55,7 @@ DELETE /api/test/sessions
 
 - **精确匹配**：Slash 命令返回固定格式（`/help` → 包含 "可用命令"）
 - **关键词包含**：LLM 回复包含关键信息（"张三"、"1048576"）
-- **LLM-as-Judge**：语义判断回复质量（`llm_assert()` 工具函数，使用 qwen3-max）
+- **LLM-as-Judge**：语义判断回复质量（`llm_assert()` 工具函数，使用 ZHIPU/GLM-5.3-Flash）
 - **Langfuse 验证**：trace 存在性、tree 结构完整性、GENERATION 有 model 字段
 - **副作用验证**：文件是否生成、记忆是否写入、审计日志是否记录
 - **否定断言**：安全场景验证回复不包含敏感信息

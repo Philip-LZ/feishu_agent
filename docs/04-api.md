@@ -403,10 +403,10 @@ v2 保留 v1 的 Loading UI 模式：
 
 | 场景 | 模型 | 调用位置 |
 |---|---|---|
-| 主 Agent 对话 | `qwen3-max` | `MemoryAwareCrew.run_and_index` |
-| Sub-Crew | `qwen3-max` | `build_skill_crew` |
+| 主 Agent 对话 | `ZHIPU/GLM-5.3-Flash` | `MemoryAwareCrew.run_and_index` |
+| Sub-Crew | `ZHIPU/GLM-5.3-Flash` | `build_skill_crew` |
 | 压缩摘要（L19） | `qwen3-turbo` | `context_mgmt._summarize_chunk` |
-| 记忆摘要（L21） | `qwen3-max` | `indexer.extract_summary_and_tags` |
+| 记忆摘要（L21） | `ZHIPU/GLM-5.3-Flash` | `indexer.extract_summary_and_tags` |
 | Embedding | `text-embedding-v3` dim=1024 | `indexer.embed_texts`, `search_memory.embed_query` |
 
 ### 5.2 适配层：AliyunLLM
@@ -451,7 +451,7 @@ class AliyunLLM(BaseLLM):
 base_url = https://dashscope.aliyuncs.com/compatible-mode/v1
 ```
 
-OpenAI 兼容格式；`model` 字段传 `qwen3-max` 等。
+OpenAI 兼容格式；`model` 字段传 `ZHIPU/GLM-5.3-Flash` 等。
 
 ### 5.4 超时 & 重试
 
@@ -472,7 +472,7 @@ OpenAI 兼容格式；`model` 字段传 `qwen3-max` 等。
 
 通过 `xiaopaw_llm_calls_total{model, status}` metric 计费：
 
-- 查询 `sum(rate(xiaopaw_llm_calls_total{model="qwen3-max"}[1d])) * 86400` 获得日调用次数
+- 查询 `sum(rate(xiaopaw_llm_calls_total{model="ZHIPU/GLM-5.3-Flash"}[1d])) * 86400` 获得日调用次数
 - 乘以单价（公开）得成本
 - 月度成本超预算时告警
 

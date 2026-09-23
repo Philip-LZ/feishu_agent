@@ -969,7 +969,7 @@ CPython 不支持强制终止线程。shutdown 时必须**承认 zombie** 并打
 - **日活 session**：~500（上限 1000）
 - **峰值 QPS**：单 routing_key 内 0.5/s（用户思考时间）；全局 ~10/s（50 个 rk 同时活跃）
 - **agent p95 延迟**：<60s（SLO）
-- **LLM 调用 p95**：<20s（qwen3-max 在 DashScope 的典型值；**实际值取决于外部 API 抖动**，压测时若接真实 Qwen，需单独基线化）
+- **LLM 调用 p95**：<20s（ZHIPU/GLM-5.3-Flash 在 DashScope 的典型值；**实际值取决于外部 API 抖动**，压测时若接真实 Qwen，需单独基线化）
 
 ### 11.2 预期瓶颈
 

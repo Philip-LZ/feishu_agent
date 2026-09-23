@@ -310,7 +310,7 @@ bot:
   prefix: ""
 
 agent:
-  model: "qwen3-max"
+  model: "ZHIPU/GLM-5.3-Flash"
   max_iter: 50
   max_input_tokens: 30000
   # ... 其他不变

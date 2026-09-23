@@ -63,7 +63,7 @@ feishu:
   app_secret: "xxx"              # 飞书应用 App Secret
 
 agent:
-  model: "qwen3-max"             # 主 LLM（默认即可）
+  model: "ZHIPU/GLM-5.3-Flash"             # 主 LLM（默认即可）
 
 sandbox:
   url: "http://localhost:8030/mcp"  # 沙箱地址（与 compose 端口一致）
@@ -126,7 +126,7 @@ docker compose -f sandbox-docker-compose.yaml restart
 
 # 验证 host / container inode 一致
 stat -c "host=%i" data/workspace
-docker exec xiaopaw-v2-aio-sandbox-1 stat -c "container=%i" /workspace
+docker exec feishu_agent-aio-sandbox-1 stat -c "container=%i" /workspace
 # 两个数字必须相同，否则 mount 还是坏的
 ```
 

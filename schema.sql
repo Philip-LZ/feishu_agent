@@ -1,5 +1,5 @@
 -- XiaoPaw v3 pgvector schema
--- Requires: CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS memories (
     id              TEXT PRIMARY KEY,

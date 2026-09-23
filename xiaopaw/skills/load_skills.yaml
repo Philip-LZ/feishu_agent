@@ -31,7 +31,7 @@ baidu_search:
 
 web_browse:
   type: task
-  enabled: true
+  enabled: false
 
 history_reader:
   type: reference

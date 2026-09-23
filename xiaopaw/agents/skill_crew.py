@@ -100,7 +100,7 @@ def build_skill_crew(
     skill_instructions: str,
     session_id: str = "",
     sandbox_mcp_url: str = _DEFAULT_SANDBOX_MCP_URL,
-    sub_agent_model: str = "qwen3-max",
+    sub_agent_model: str = "ZHIPU/GLM-5.3-Flash",
     max_iter: int = 20,
     allowed_tools: list[str] | None = None,
 ) -> Crew:

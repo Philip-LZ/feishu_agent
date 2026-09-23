@@ -10,6 +10,7 @@ dependencies = [
     "requests>=2.31",
     "crewai>=1.9.3",
     "lark-oapi>=1.3",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

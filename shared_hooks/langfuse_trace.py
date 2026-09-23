@@ -435,7 +435,7 @@ def before_llm_handler(ctx) -> None:
     elif prompt_preview:
         gen_input = {"prompt": prompt_preview}
 
-    model = ctx.metadata.get("model", "") or "qwen3-max"
+    model = ctx.metadata.get("model", "") or "ZHIPU/GLM-5.3-Flash"
 
     from langfuse.api import CreateGenerationBody
     from langfuse.api.ingestion.types import IngestionEvent_GenerationCreate

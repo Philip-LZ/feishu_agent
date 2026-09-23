@@ -18,12 +18,14 @@ import sys
 
 import psycopg2
 import psycopg2.extras
+from dotenv import load_dotenv
 from openai import OpenAI
+
+load_dotenv()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 配置
 # ─────────────────────────────────────────────────────────────────────────────
-
 DB_DSN = os.getenv(
     "MEMORY_DB_DSN",
     "postgresql://xiaopaw:xiaopaw123@localhost:5432/xiaopaw_memory",
@@ -205,4 +207,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

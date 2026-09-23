@@ -439,7 +439,7 @@ async def test_llm_5xx_then_ok_retries_and_succeeds():
             httpx.Response(200, json={"output": {"text": "ok"}, "usage": {"total_tokens": 5}}),
         ]
         from xiaopaw.llm.aliyun_llm import AliyunLLM
-        llm = AliyunLLM(api_key="sk-test", model="qwen3-max")
+        llm = AliyunLLM(api_key="sk-test", model="ZHIPU/GLM-5.3-Flash")
         reply = await llm.chat([{"role": "user", "content": "hi"}])
         assert reply["content"] == "ok"
         assert route.call_count == 3
@@ -468,7 +468,7 @@ async def test_llm_timeout_escalates_after_max_retries(mock_qwen):
         route = router.post("/api/v1/services/aigc/text-generation/generation").mock(
             side_effect=httpx.TimeoutException("timeout")
         )
-        llm = AliyunLLM(api_key="sk-test", model="qwen3-max", max_retries=3)
+        llm = AliyunLLM(api_key="sk-test", model="ZHIPU/GLM-5.3-Flash", max_retries=3)
         with pytest.raises(httpx.TimeoutException):  # 原始异常，不是 RetryError
             await llm.chat([{"role": "user", "content": "hi"}])
         assert route.call_count == 3
@@ -482,7 +482,7 @@ async def test_llm_429_triggers_backoff_metric():
             return_value=httpx.Response(429, headers={"Retry-After": "1"})
         )
         from xiaopaw.llm.aliyun_llm import AliyunLLM
-        llm = AliyunLLM(api_key="sk-test", model="qwen3-max", max_retries=2)
+        llm = AliyunLLM(api_key="sk-test", model="ZHIPU/GLM-5.3-Flash", max_retries=2)
         before = EXTERNAL_API_RETRY.labels(api="qwen").get()
         with pytest.raises(Exception):
             await llm.chat([{"role": "user", "content": "hi"}])
@@ -1189,7 +1189,7 @@ def pgvector_dsn():
 | 指标 | 目标（real LLM） | 目标（stub LLM） | 测量 |
 |---|---|---|---|
 | agent p95 端到端 | <60s | <5s | `xiaopaw_agent_latency_seconds` |
-| LLM p95 | <20s | <0.1s | `xiaopaw_llm_latency_seconds{model="qwen3-max"}` |
+| LLM p95 | <20s | <0.1s | `xiaopaw_llm_latency_seconds{model="ZHIPU/GLM-5.3-Flash"}` |
 | 100 rk 并发 `/api/test/message` p95 | **<60s** | **<5s** | `scripts/load_test.py --mode <real\|stub>` |
 | 72h 内存增长斜率 | <1MB/h | <1MB/h | canary `container_memory_rss` |
 | Runner 单 rk 串行 200 条消息 | 无丢失，FIFO | 无丢失，FIFO | 集成测试断言 |

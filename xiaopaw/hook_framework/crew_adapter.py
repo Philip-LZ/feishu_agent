@@ -152,7 +152,7 @@ class CrewObservabilityAdapter:
                 metadata={
                     "prompt_preview": preview,
                     "prompt_messages": prompt_messages,
-                    "model": model or os.environ.get("AGENT_MODEL", "qwen3-max"),
+                    "model": model or os.environ.get("AGENT_MODEL", "ZHIPU/GLM-5.3-Flash"),
                 },
             ),
         )

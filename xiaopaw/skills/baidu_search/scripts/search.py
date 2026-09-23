@@ -14,7 +14,6 @@ import sys
 
 import requests
 
-
 # ───────────────────── 凭证读取 ─────────────────────────────
 
 def _get_api_key() -> str:

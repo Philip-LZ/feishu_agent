@@ -207,7 +207,7 @@ sequenceDiagram
     FS->>F: PATCH /card
 
     Note over MC, PGV: 异步建索引（不阻塞）
-    MC->>QWEN: extract_summary_and_tags (qwen3-max)
+    MC->>QWEN: extract_summary_and_tags (ZHIPU/GLM-5.3-Flash)
     MC->>QWEN: embed_texts (text-embedding-v3)
     MC->>PGV: upsert_memory ON CONFLICT DO NOTHING
 ```

@@ -8,7 +8,6 @@ from functools import cache
 
 logger = logging.getLogger(__name__)
 
-
 @cache
 def _get_llm_client():
     """Singleton OpenAI-compatible client for embeddings + summarization."""

@@ -10,10 +10,10 @@ feishu:
   allowed_chats: []                  # 允许的群聊 ID（空 = 全部允许）
 
 agent:
-  model: "qwen3-max"
+  model: "ZHIPU/GLM-5.3-Flash"
   max_iter: 50
   max_input_tokens: 30000
-  sub_agent_model: "qwen3-max"
+  sub_agent_model: "ZHIPU/GLM-5.3-Flash"
   sub_agent_max_iter: 20
   timeout_s: 300
   llm_timeout_s: 120

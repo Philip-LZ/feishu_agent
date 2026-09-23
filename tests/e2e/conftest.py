@@ -85,7 +85,7 @@ def llm_assert(reply: str, criteria: str, *, api_key: str = "") -> bool:
         "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         json={
-            "model": "qwen3-max",
+            "model": "ZHIPU/GLM-5.3-Flash",
             "messages": [
                 {
                     "role": "system",

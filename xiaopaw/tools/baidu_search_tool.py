@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 _SEARCH_URL = "https://qianfan.baidubce.com/v2/ai_search/web_search"
 
-
 class BaiduSearchInput(BaseModel):
     query: str
     top_k: int = Field(default=20, ge=0, le=50)

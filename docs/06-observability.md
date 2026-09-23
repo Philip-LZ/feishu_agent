@@ -337,7 +337,7 @@ def mask_pii(text: str) -> str:
 - **前缀**：所有指标统一 `xiaopaw_` 前缀
 - **单位后缀**：`_seconds` / `_bytes` / `_total`（counter 必须以 `_total` 结尾）
 - **label 基数**：所有 label 值集合基数 <100；绝不把 `trace_id` / `session_id` / `routing_key` 写成 label
-- **label 取值白名单**：`routing_type ∈ {p2p, group, thread}`；`status ∈ {ok, timeout, rate_limited, 4xx, 5xx, cancelled, network_error}`；`model ∈ {qwen3-max, qwen-turbo, text-embedding-v3}`
+- **label 取值白名单**：`routing_type ∈ {p2p, group, thread}`；`status ∈ {ok, timeout, rate_limited, 4xx, 5xx, cancelled, network_error}`；`model ∈ {ZHIPU/GLM-5.3-Flash, qwen-turbo, text-embedding-v3}`
 
 ### 4.2 8 个核心指标（v2 精简）
 
@@ -370,7 +370,7 @@ xiaopaw_llm_calls_total = Counter(
 )
 ```
 
-- **label**：`model ∈ {qwen3-max, qwen-turbo, text-embedding-v3}`；`status ∈ {ok, timeout, rate_limited, 4xx, 5xx, cancelled, network_error}`
+- **label**：`model ∈ {ZHIPU/GLM-5.3-Flash, qwen-turbo, text-embedding-v3}`；`status ∈ {ok, timeout, rate_limited, 4xx, 5xx, cancelled, network_error}`
 - **埋点**：`AliyunLLM._request` finally 分支；status 含义与打点位置：
   - `ok`：2xx 返回
   - `timeout`：`asyncio.TimeoutError`（包括 tenacity 最后一次重试超时）

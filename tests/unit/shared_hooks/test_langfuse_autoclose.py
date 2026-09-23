@@ -120,7 +120,7 @@ class TestBeforeLlmAutoCloseSpans:
         ]
         ctx = _make_ctx(
             EventType.BEFORE_LLM,
-            metadata={"model": "qwen3-max", "prompt_messages": prompt_messages},
+            metadata={"model": "ZHIPU/GLM-5.3-Flash", "prompt_messages": prompt_messages},
         )
         mod.before_llm_handler(ctx)
 
@@ -154,7 +154,7 @@ class TestBeforeLlmAutoCloseSpans:
         ]
         ctx = _make_ctx(
             EventType.BEFORE_LLM,
-            metadata={"model": "qwen3-max", "prompt_messages": prompt_messages},
+            metadata={"model": "ZHIPU/GLM-5.3-Flash", "prompt_messages": prompt_messages},
         )
         mod.before_llm_handler(ctx)
 
@@ -177,7 +177,7 @@ class TestBeforeLlmAutoCloseSpans:
             (("span-1", "baidu_search", 1, {"q": "test"}),)
         )
 
-        ctx = _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+        ctx = _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         mod.before_llm_handler(ctx)
 
         span_updates = _get_events_of_type("span-update")
@@ -204,7 +204,7 @@ class TestBeforeLlmAutoCloseSpans:
         ]
         ctx = _make_ctx(
             EventType.BEFORE_LLM,
-            metadata={"model": "qwen3-max", "prompt_messages": prompt_messages},
+            metadata={"model": "ZHIPU/GLM-5.3-Flash", "prompt_messages": prompt_messages},
         )
         mod.before_llm_handler(ctx)
 
@@ -230,7 +230,7 @@ class TestBeforeLlmAutoCloseSpans:
         ]
         ctx = _make_ctx(
             EventType.BEFORE_LLM,
-            metadata={"model": "qwen3-max", "prompt_messages": prompt_messages},
+            metadata={"model": "ZHIPU/GLM-5.3-Flash", "prompt_messages": prompt_messages},
         )
         mod.before_llm_handler(ctx)
 
@@ -252,7 +252,7 @@ class TestBeforeLlmAutoCloseSpans:
             (("span-ae", "agent_execution", 1, {"content": "hello"}),)
         )
 
-        ctx = _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+        ctx = _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         mod.before_llm_handler(ctx)
 
         gen_updates = _get_events_of_type("generation-update")
@@ -267,7 +267,7 @@ class TestBeforeLlmAutoCloseSpans:
         mod._gen_id_var.set("prev-gen-id")
         mod._span_stack_var.set(())
 
-        ctx = _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+        ctx = _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         mod.before_llm_handler(ctx)
 
         gen_updates = _get_events_of_type("generation-update")
@@ -284,7 +284,7 @@ class TestBeforeLlmAutoCloseSpans:
             (("span-1", "baidu_search", 1, {"q": "test"}),)
         )
 
-        ctx = _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+        ctx = _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         mod.before_llm_handler(ctx)
 
         span_updates = _get_events_of_type("span-update")
@@ -311,7 +311,7 @@ class TestBeforeLlmAutoCloseSpans:
         ]
         ctx = _make_ctx(
             EventType.BEFORE_LLM,
-            metadata={"model": "qwen3-max", "prompt_messages": prompt_messages},
+            metadata={"model": "ZHIPU/GLM-5.3-Flash", "prompt_messages": prompt_messages},
         )
         mod.before_llm_handler(ctx)
 
@@ -405,7 +405,7 @@ class TestAfterToolRecovery:
         mod.before_llm_handler(
             _make_ctx(
                 EventType.BEFORE_LLM,
-                metadata={"model": "qwen3-max", "prompt_messages": prompt_messages},
+                metadata={"model": "ZHIPU/GLM-5.3-Flash", "prompt_messages": prompt_messages},
             )
         )
         assert mod._closed_spans_var.get({}).get(("baidu_search", 1)) == "span-1"
@@ -461,7 +461,7 @@ class TestParentHierarchy:
         from xiaopaw.hook_framework.registry import EventType
 
         mod.before_llm_handler(
-            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         )
         gen_id = mod._gen_id_var.get("")
         assert gen_id
@@ -490,7 +490,7 @@ class TestParentHierarchy:
         )
 
         mod.before_llm_handler(
-            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         )
 
         gen_creates = _get_events_of_type("generation-create")
@@ -504,7 +504,7 @@ class TestParentHierarchy:
         mod._span_stack_var.set(())
 
         mod.before_llm_handler(
-            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         )
 
         gen_creates = _get_events_of_type("generation-create")
@@ -597,7 +597,7 @@ class TestSubCrewFlowSimulation:
 
         ctx_llm = lambda msgs=None: _make_ctx(
             EventType.BEFORE_LLM,
-            metadata={"model": "qwen3-max", "prompt_messages": msgs or []},
+            metadata={"model": "ZHIPU/GLM-5.3-Flash", "prompt_messages": msgs or []},
         )
         ctx_tool = lambda name: _make_ctx(
             EventType.BEFORE_TOOL_CALL, tool_name=name, tool_input={"q": "test"}
@@ -667,7 +667,7 @@ class TestSubCrewFlowSimulation:
         from xiaopaw.hook_framework.registry import EventType
 
         mod.before_llm_handler(
-            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         )
 
         mod.before_tool_handler(
@@ -683,7 +683,7 @@ class TestSubCrewFlowSimulation:
             _make_ctx(
                 EventType.BEFORE_LLM,
                 metadata={
-                    "model": "qwen3-max",
+                    "model": "ZHIPU/GLM-5.3-Flash",
                     "prompt_messages": [
                         {"role": "assistant", "content": "running bash"},
                         {"role": "tool", "name": "sandbox_bash", "content": "auto-close output"},
@@ -722,7 +722,7 @@ class TestSubCrewFlowSimulation:
         )
 
         mod.before_llm_handler(
-            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "qwen3-max"})
+            _make_ctx(EventType.BEFORE_LLM, metadata={"model": "ZHIPU/GLM-5.3-Flash"})
         )
         gen1_id = mod._gen_id_var.get("")
 
@@ -738,7 +738,7 @@ class TestSubCrewFlowSimulation:
             _make_ctx(
                 EventType.BEFORE_LLM,
                 metadata={
-                    "model": "qwen3-max",
+                    "model": "ZHIPU/GLM-5.3-Flash",
                     "prompt_messages": [
                         {"role": "assistant", "content": "calling skill"},
                         {"role": "tool", "name": "skill_loader", "content": "saved"},

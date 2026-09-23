@@ -25,3 +25,4 @@ feishu.json
 workspace/*/output/
 .venv/
 venv/
+.vscode/

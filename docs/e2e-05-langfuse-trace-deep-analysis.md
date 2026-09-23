@@ -52,7 +52,7 @@
 |------|------|------|
 | Input | ✅ | system prompt（XiaoPaw 身份 + Soul + Agent 配置）+ user task |
 | Output | ✅ | `{"action": "tool_calls", "tools": ["agent_execution", "skill_loader"]}` |
-| Model | qwen3-max | ✅ |
+| Model | ZHIPU/GLM-5.3-Flash | ✅ |
 | Duration | 4.6s | ✅ 正常 |
 | Usage | ❌ | input=0, output=0, total=0 |
 | Parent | tool-agent_execution | ✅ 正确嵌套 |

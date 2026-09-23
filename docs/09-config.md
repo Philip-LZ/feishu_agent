@@ -108,10 +108,10 @@ bot:
 # Agent
 # ──────────────────────────────────────────────────────────
 agent:
-  model: "qwen3-max"
+  model: "ZHIPU/GLM-5.3-Flash"
   max_iter: 50
   max_input_tokens: 30000
-  sub_agent_model: "qwen3-max"
+  sub_agent_model: "ZHIPU/GLM-5.3-Flash"
   sub_agent_max_iter: 20
   timeout_s: 300
   llm_timeout_s: 120
@@ -272,10 +272,10 @@ class FeishuConfig(BaseModel):
     allowed_chats: list[str] = Field(default_factory=list)
 
 class AgentConfig(BaseModel):
-    model: str = "qwen3-max"
+    model: str = "ZHIPU/GLM-5.3-Flash"
     max_iter: int = Field(default=50, ge=1, le=200)
     max_input_tokens: int = Field(default=30000, ge=1000, le=128000)
-    sub_agent_model: str = "qwen3-max"
+    sub_agent_model: str = "ZHIPU/GLM-5.3-Flash"
     sub_agent_max_iter: int = Field(default=20, ge=1, le=100)
     timeout_s: int = Field(default=300, ge=30, le=3600)
     llm_timeout_s: int = Field(default=120, ge=10, le=600)

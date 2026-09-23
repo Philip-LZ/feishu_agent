@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 import yaml
 from crewai import Agent, Crew, Process, Task
@@ -66,7 +66,7 @@ def _format_cfg(cfg: dict, **kwargs) -> dict:
     return result
 
 
-def _make_subcrew_step_callback() -> Callable[[Any], Awaitable[None]]:
+def _make_subcrew_step_callback() -> Callable[[Any], None]:
     """Step callback for sub-crew: fires AFTER_TOOL_CALL + AFTER_TURN events.
 
     Unlike the main crew's step_callback, this omits sender.send_thinking
@@ -75,7 +75,7 @@ def _make_subcrew_step_callback() -> Callable[[Any], Awaitable[None]]:
     from crewai.agents.parser import AgentAction, AgentFinish
     from xiaopaw.hook_framework.crew_adapter import get_current_adapter
 
-    async def _callback(step_output: Any) -> None:
+    def _callback(step_output: Any) -> None:
         adapter = get_current_adapter()
         if not adapter:
             return

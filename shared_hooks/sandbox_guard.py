@@ -127,8 +127,10 @@ class SandboxGuard:
             self._record("dangerous_command", ctx.tool_name, text)
             raise GuardrailDeny(DenyReason.SANDBOX_VIOLATION, "Dangerous command detected")
 
-        # 沙箱原生工具豁免：sandbox_xxx / mcp_xxx 在隔离容器里跑 shell 是合法的
-        if not _SANDBOX_TOOL_MARKER.search(ctx.tool_name) and _SHELL_INJECTION.search(text):
+        # skill_loader 接收自然语言任务；NFKC 会把中文分号变成 shell 分号。
+        # 沙箱工具的 shell 参数也允许操作符，危险命令仍由上面的规则拦截。
+        if (ctx.tool_name != "skill_loader" and not _SANDBOX_TOOL_MARKER.search(ctx.tool_name)
+                and _SHELL_INJECTION.search(text)):
             self._record("shell_injection", ctx.tool_name, text)
             raise GuardrailDeny(DenyReason.SANDBOX_VIOLATION, "Shell injection detected")
 

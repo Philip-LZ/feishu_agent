@@ -14,6 +14,7 @@ from pathlib import Path
 from xiaopaw.feishu.session_key import routing_type
 from xiaopaw.hook_framework.crew_adapter import CrewObservabilityAdapter, set_current_adapter
 from xiaopaw.hook_framework.registry import EventType, GuardrailDeny, HookContext, HookRegistry
+from xiaopaw.memory.indexer import async_index_turn
 from xiaopaw.models import InboundMessage, SenderProtocol
 from xiaopaw.observability.metrics import agent_latency, inbound_total
 from xiaopaw.observability.trace import bind_trace_id
@@ -40,6 +41,7 @@ class Runner:
         max_queue_size: int = 10,
         data_dir: Path | None = None,
         hook_registry: HookRegistry | None = None,
+        db_dsn: str = "",
     ) -> None:
         self._session_mgr = session_mgr
         self._sender = sender
@@ -47,6 +49,7 @@ class Runner:
         self._idle_timeout = idle_timeout
         self._max_queue_size = max_queue_size
         self._data_dir = data_dir or Path("data")
+        self._db_dsn = db_dsn
 
         self._hook_registry = hook_registry
 
@@ -109,6 +112,7 @@ class Runner:
     async def _handle(self, inbound: InboundMessage) -> None:
         token = bind_trace_id(inbound.trace_id)
         start = time.monotonic()
+        turn_ts = int(time.time() * 1000)
         key = inbound.routing_key
 
         adapter: CrewObservabilityAdapter | None = None
@@ -199,6 +203,18 @@ class Runner:
                 assistant=reply,
                 ts=inbound.ts,
             )
+
+            if self._db_dsn:
+                task = asyncio.create_task(async_index_turn(
+                    session_id=session.id,
+                    routing_key=key,
+                    user_message=inbound.content,
+                    assistant_reply=reply,
+                    turn_ts=turn_ts,
+                    db_dsn=self._db_dsn,
+                ))
+                self._pending_index_tasks.add(task)
+                task.add_done_callback(self._pending_index_tasks.discard)
 
             elapsed = time.monotonic() - start
             agent_latency.labels(routing_type=routing_type(key)).observe(elapsed)
@@ -324,8 +340,6 @@ class Runner:
         if self._workers:
             await asyncio.gather(*self._workers.values(), return_exceptions=True)
 
-        for task in self._pending_index_tasks:
-            task.cancel()
         if self._pending_index_tasks:
             await asyncio.gather(*self._pending_index_tasks, return_exceptions=True)
 

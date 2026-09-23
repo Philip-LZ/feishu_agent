@@ -12,7 +12,7 @@
 |------|------|
 | 测试状态 | ✅ PASSED |
 | 总耗时 | 185.46s (3分05秒) |
-| LLM-as-Judge | ✅ 通过（Qwen3-max 判定回复与 Python 3.13 相关且含具体信息） |
+| LLM-as-Judge | ✅ 通过（ZHIPU/GLM-5.3-Flash 判定回复与 Python 3.13 相关且含具体信息） |
 | Langfuse Trace | ✅ 21 个 observation 全部记录 |
 | 搜索结果质量 | ✅ 包含 GIL/Nogil、错误消息改进、typing 增强等具体特性 |
 
@@ -120,10 +120,10 @@ routing_key: p2p:ou_search
 1. **两层架构工作正常**: Main Crew → SkillLoaderTool → Sub-Crew → Sandbox MCP 全链路打通
 2. **搜索结果准确**: 返回 Python 3.13 的具体特性（Nogil/GIL移除、错误消息改进、typing增强）
 3. **Langfuse 追踪完整**: 21个 observation 覆盖所有事件点，span 层级清晰
-4. **LLM-as-Judge 通过**: Qwen3-max 判定回复满足语义相关性标准
+4. **LLM-as-Judge 通过**: ZHIPU/GLM-5.3-Flash 判定回复满足语义相关性标准
 
 ### ⚠️ 性能瓶颈
-1. **llm-call-4 耗时 131.2s**: 占总耗时 72%。原因是 Sub-Crew 在处理 17 条搜索结果时，Qwen3-max 的输入 token 量大（搜索结果全文）+ 输出 JSON 写入。这是整个流程的主要瓶颈。
+1. **llm-call-4 耗时 131.2s**: 占总耗时 72%。原因是 Sub-Crew 在处理 17 条搜索结果时，ZHIPU/GLM-5.3-Flash 的输入 token 量大（搜索结果全文）+ 输出 JSON 写入。这是整个流程的主要瓶颈。
 2. **Sub-Crew 执行了两次搜索**: 第一次正常搜索后，又执行了一次带重定向的搜索（保存 raw JSON），可能是 Skill 指令中的流程要求，但增加了约 11s 延迟。
 3. **8 次 LLM 调用**: 总 LLM 时间 178.5s，占总耗时 98.6%。工具执行本身极快（sandbox bash < 3s, file ops < 0.2s）。
 

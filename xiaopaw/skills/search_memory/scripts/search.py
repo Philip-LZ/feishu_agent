@@ -26,10 +26,7 @@ load_dotenv()
 # ─────────────────────────────────────────────────────────────────────────────
 # 配置
 # ─────────────────────────────────────────────────────────────────────────────
-DB_DSN = os.getenv(
-    "MEMORY_DB_DSN",
-    "postgresql://xiaopaw:xiaopaw123@localhost:5432/xiaopaw_memory",
-)
+DB_DSN = os.getenv("MEMORY_DB_DSN", "")
 QWEN_API_KEY = os.getenv("QWEN_API_KEY", "")
 EMBED_MODEL  = "text-embedding-v3"
 EMBED_DIM    = 1024
@@ -59,9 +56,9 @@ def embed_query(query: str) -> list[float]:
 
 def search(
     query:       str,
+    routing_key: str,
     tags:        list[str] | None = None,
     days:        int | None       = None,
-    routing_key: str | None       = None,
     limit:       int              = 5,
     mode:        str              = "hybrid",   # hybrid / vector / fulltext
 ) -> list[dict]:
@@ -69,12 +66,16 @@ def search(
     💡 核心点：混合检索 = 向量语义 + BM25全文 + 标量过滤，一条 SQL 搞定
     向量得分权重 0.7，全文得分权重 0.3
     """
+    if not DB_DSN:
+        raise RuntimeError("MEMORY_DB_DSN is required for memory search")
+    if not routing_key:
+        raise ValueError("routing_key is required for memory search")
     conn = psycopg2.connect(DB_DSN)
     conn.autocommit = True
 
     # 构建标量过滤条件
-    where_clauses = []
-    params: dict = {}
+    where_clauses = ["routing_key = %(routing_key)s"]
+    params: dict = {"routing_key": routing_key}
 
     if tags:
         where_clauses.append("tags && %(tags)s")          # 💡 && = 数组有交集
@@ -84,10 +85,6 @@ def search(
         # 💡 核心点：INTERVAL 内部不支持 psycopg2 参数替换，用 make_interval() 代替
         where_clauses.append("created_at > NOW() - make_interval(days => %(days)s)")
         params["days"] = days
-
-    if routing_key:
-        where_clauses.append("routing_key = %(routing_key)s")
-        params["routing_key"] = routing_key
 
     where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -183,7 +180,7 @@ def main() -> None:
     parser.add_argument("--query",       required=True,  help="搜索意图（自然语言）")
     parser.add_argument("--tags",        default=None,   help="标签过滤，逗号分隔（如 工作,文件处理）")
     parser.add_argument("--days",        type=int, default=None, help="时间范围，最近N天")
-    parser.add_argument("--routing_key", default=None,   help="限定用户")
+    parser.add_argument("--routing_key", required=True, help="当前会话的 routing_key")
     parser.add_argument("--limit",       type=int, default=5, help="返回条数")
     parser.add_argument("--mode",        default="hybrid", choices=["hybrid", "vector", "fulltext"])
     args = parser.parse_args()

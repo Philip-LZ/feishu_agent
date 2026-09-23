@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
-from collections.abc import Awaitable, Callable, Coroutine
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +33,6 @@ from xiaopaw.memory.context_mgmt import (
     prune_tool_results,
     save_session_ctx,
 )
-from xiaopaw.memory.indexer import async_index_turn
 from xiaopaw.models import SenderProtocol
 from xiaopaw.session.models import MessageEntry
 from xiaopaw.tools.intermediate_tool import IntermediateTool
@@ -78,7 +76,7 @@ def _normalize_tool_input(tool_input: dict) -> None:
 
 def _make_step_callback(
     sender: SenderProtocol, routing_key: str
-) -> Callable[[Any], Awaitable[None]]:
+) -> Callable[[Any], None]:
     """生成 CrewAI step_callback —— 每个推理 step 后触发。
 
     【L33 接线点：pending_deny 的安全出口】
@@ -90,7 +88,7 @@ def _make_step_callback(
     触发 AFTER_TURN 事件链：cost_guard 算账、loop_detector 检测循环、
     langfuse_trace 关闭本轮 generation。
     """
-    async def _callback(step_output: Any) -> None:
+    def _callback(step_output: Any) -> None:
         # Don't call send_thinking here: it creates orphaned cards.
         # The runner's card (sent before agent_fn) already shows thinking state.
 
@@ -129,7 +127,6 @@ class MemoryAwareCrew:
         workspace_dir: Path,
         ctx_dir: Path,
         history_all: list[MessageEntry],
-        db_dsn: str = "",
         max_history_turns: int = _DEFAULT_MAX_HISTORY_TURNS,
         sandbox_url: str = "",
         flags: FeatureFlags | None = None,
@@ -141,7 +138,6 @@ class MemoryAwareCrew:
         self._sender = sender
         self._workspace_dir = workspace_dir
         self._ctx_dir = ctx_dir
-        self._db_dsn = db_dsn
         self._history_all = history_all
         self._max_history_turns = max_history_turns
         self._sandbox_url = sandbox_url
@@ -153,9 +149,6 @@ class MemoryAwareCrew:
         self._session_loaded = False
         self._last_msgs: list[dict] = []
         self._history_len = 0
-        self._turn_start_ts = int(time.time() * 1000)
-
-        self._index_coroutine: Coroutine | None = None
 
     @agent
     def orchestrator(self) -> Agent:
@@ -292,16 +285,6 @@ class MemoryAwareCrew:
             except Exception:
                 reply = str(result.raw) if result.raw else str(result)
 
-            if self._db_dsn:
-                self._index_coroutine = async_index_turn(
-                    session_id=self.session_id,
-                    routing_key=self.routing_key,
-                    user_message=self.user_message,
-                    assistant_reply=reply,
-                    turn_ts=self._turn_start_ts,
-                    db_dsn=self._db_dsn,
-                )
-
             return reply
         finally:
             try:
@@ -314,7 +297,6 @@ def build_agent_fn(
     sender: SenderProtocol,
     workspace_dir: Path,
     ctx_dir: Path,
-    db_dsn: str = "",
     max_history_turns: int = _DEFAULT_MAX_HISTORY_TURNS,
     sandbox_url: str = "",
     flags: FeatureFlags | None = None,
@@ -336,7 +318,6 @@ def build_agent_fn(
             workspace_dir=workspace_dir,
             ctx_dir=ctx_dir,
             history_all=history,
-            db_dsn=db_dsn,
             max_history_turns=max_history_turns,
             sandbox_url=sandbox_url,
             flags=flags,

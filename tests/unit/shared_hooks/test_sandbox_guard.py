@@ -189,6 +189,22 @@ class TestFalsePositive:
         with pytest.raises(GuardrailDeny):
             guard.before_tool_handler(_tool_ctx("query && cat /etc/passwd"))
 
+    def test_skill_loader_accepts_memory_task_punctuation(self):
+        guard = SandboxGuard()
+        guard.before_tool_handler(_tool_ctx(
+            {
+                "skill_name": "memory-save",
+                "task_context": "保存用户偏好：Python 后端工程师；偏好 FastAPI。",
+            },
+            tool_name="skill_loader",
+        ))
+        assert guard.get_metrics()["total_violations"] == 0
+        with pytest.raises(GuardrailDeny, match="Dangerous command"):
+            guard.before_tool_handler(_tool_ctx(
+                {"skill_name": "memory-save", "task_context": "rm -rf /"},
+                tool_name="skill_loader",
+            ))
+
 
 # ── Audit & Metrics ──────────────────────────────────────────────────
 

@@ -26,7 +26,7 @@ version: "1.0"
 ## 数据库结构
 
 连接信息（从环境变量读取）：
-- DSN：`MEMORY_DB_DSN`，默认 `postgresql://xiaopaw:xiaopaw123@localhost:5432/xiaopaw_memory`
+- DSN：沙箱环境变量 `MEMORY_DB_DSN`（必填）；本地 Docker 配置默认连接宿主机的 `host.docker.internal:5432/xiaopaw`
 
 `memories` 表字段说明：
 
@@ -67,6 +67,7 @@ version: "1.0"
 ```bash
 python /mnt/skills/search_memory/scripts/search.py \
   --query "用户的搜索意图" \
+  --routing_key "当前 sandbox_execution_directive 中的 routing_key" \
   --tags "工作,文件处理" \
   --days 7 \
   --limit 5 \
@@ -80,7 +81,7 @@ python /mnt/skills/search_memory/scripts/search.py \
 | `--query` | 是 | 搜索意图（自然语言） |
 | `--tags` | 否 | 标签过滤，逗号分隔（如 `工作,文件处理`） |
 | `--days` | 否 | 时间范围，最近N天（如 `7` 表示最近一周） |
-| `--routing_key` | 否 | 限定用户（默认不限） |
+| `--routing_key` | 是 | 使用当前 sandbox_execution_directive 中的 routing_key，限定当前会话 |
 | `--limit` | 否 | 返回条数，默认 5 |
 | `--mode` | 否 | 搜索模式：`hybrid`（默认）/ `vector` / `fulltext` |
 
@@ -107,17 +108,17 @@ JSON 数组，每条记录包含：
 
 ### 示例1：语义搜索（用户问"上次那个航班"）
 ```bash
-python /mnt/skills/search_memory/scripts/search.py --query "航班查询" --mode vector --limit 3
+python /mnt/skills/search_memory/scripts/search.py --query "航班查询" --routing_key "当前 routing_key" --mode vector --limit 3
 ```
 
 ### 示例2：混合搜索（"上周帮我处理的文件"）
 ```bash
-python /mnt/skills/search_memory/scripts/search.py --query "文件处理" --tags "文件处理" --days 7 --mode hybrid
+python /mnt/skills/search_memory/scripts/search.py --query "文件处理" --routing_key "当前 routing_key" --tags "文件处理" --days 7 --mode hybrid
 ```
 
 ### 示例3：全文搜索（精确关键字）
 ```bash
-python /mnt/skills/search_memory/scripts/search.py --query "PDF转换" --mode fulltext --limit 5
+python /mnt/skills/search_memory/scripts/search.py --query "PDF转换" --routing_key "当前 routing_key" --mode fulltext --limit 5
 ```
 
 ---
@@ -131,4 +132,3 @@ python /mnt/skills/search_memory/scripts/search.py --query "PDF转换" --mode fu
   2. 再去掉 `--tags` 限制（标签可能不匹配）
   3. 最后切换到 `--mode vector` 纯语义搜索（关键字可能不准）
 - 如果需要查看完整回复内容，`assistant_reply` 字段已包含
-

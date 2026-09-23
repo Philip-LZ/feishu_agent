@@ -38,7 +38,7 @@ XiaoPaw 是一个运行在飞书里的 AI 工作助手。你在飞书里发消�
 - Python 3.11+
 - Docker（运行沙箱容器）
 - 飞书开发者账号（也可以用 TestAPI 本地调试，不强依赖飞书）
-- 阿里云 DashScope API Key（Qwen3-max）
+- 阿里云 DashScope API Key（ZHIPU/GLM-5.3-Flash）
 
 ### Step 1：克隆 & 安装依赖
 
@@ -149,12 +149,7 @@ export MEMORY_DB_DSN="postgresql://xiaopaw:xiaopaw@localhost:5432/xiaopaw"
 psql "$MEMORY_DB_DSN" -f schema.sql
 ```
 
-然后在 `config.yaml` 中填入：
-
-```yaml
-memory:
-  db_dsn: "postgresql://xiaopaw:xiaopaw@localhost:5432/xiaopaw"
-```
+`MEMORY_DB_DSN` 供宿主机上的 XiaoPaw 使用，优先于 `config.yaml` 的 `memory.db_dsn`。搜索脚本运行在 Docker 沙箱中；Compose 默认用 `host.docker.internal:5432` 连接上述 pgvector 容器。如需覆盖沙箱连接串，设置 `SANDBOX_MEMORY_DB_DSN`，再运行 `docker compose -f sandbox-docker-compose.yaml up -d --force-recreate`。
 
 ### Step 6：启动 XiaoPaw
 
@@ -280,7 +275,7 @@ xiaopaw-v2/
 │   ├── memory/                   #   ★ 22 课三层记忆（Bootstrap + 文件 + pgvector）
 │   ├── session/                  #   会话管理（routing_key → session 状态）
 │   ├── feishu/                   #   飞书 SDK（WebSocket 监听 + 消息发送）
-│   ├── llm/                      #   LLM 接入（Qwen3-max via DashScope）
+│   ├── llm/                      #   LLM 接入（ZHIPU/GLM-5.3-Flash via DashScope）
 │   ├── config/                   #   配置校验（Pydantic）
 │   └── observability/            #   指标 / 日志 / trace
 │
@@ -773,7 +768,7 @@ docker compose -f sandbox-docker-compose.yaml restart           # 不一致就�
 | Python | 3.11+ | 主语言（async/await） |
 | CrewAI | >= 1.9.3 | Agent 编排 |
 | lark-oapi | >= 1.3 | 飞书 SDK（WebSocket 长连接） |
-| Qwen3-max | — | 主 LLM（阿里云 DashScope） |
+| ZHIPU/GLM-5.3-Flash | — | 主 LLM（阿里云 DashScope） |
 | AIO-Sandbox | latest | MCP 执行沙盒（Docker 容器） |
 | pgvector | pg16 | 记忆搜索（PostgreSQL 扩展，可选） |
 | Langfuse | >= 4.0 | 可观测性（trace/generation/span，可选） |

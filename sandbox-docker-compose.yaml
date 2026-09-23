@@ -12,12 +12,17 @@
 
 services:
   aio-sandbox:
-    image: ghcr.io/agent-infra/sandbox:latest
+    build:
+      context: .
+      dockerfile: sandbox.Dockerfile
+    image: xiaopaw-sandbox:local
     ports:
       - "8030:8080"
     environment:
       QWEN_API_KEY: "${QWEN_API_KEY}"
-      MEMORY_DB_DSN: "${MEMORY_DB_DSN:-}"
+      MEMORY_DB_DSN: "${SANDBOX_MEMORY_DB_DSN:-postgresql://xiaopaw:xiaopaw@host.docker.internal:5432/xiaopaw}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./xiaopaw/skills:/mnt/skills:rw
       - ./data/workspace:/workspace:rw

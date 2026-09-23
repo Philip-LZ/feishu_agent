@@ -36,8 +36,14 @@ class _LRULockCache:
 
 
 class SessionManager:
-    def __init__(self, data_dir: Path, max_active_sessions: int = _LRU_MAX) -> None:
+    def __init__(
+        self,
+        data_dir: Path,
+        max_active_sessions: int = _LRU_MAX,
+        workspace_dir: Path | None = None,
+    ) -> None:
         self._data_dir = Path(data_dir)
+        self._workspace_dir = Path(workspace_dir) if workspace_dir is not None else None
         self._sessions_dir = self._data_dir / "sessions"
         self._sessions_dir.mkdir(parents=True, exist_ok=True)
         self._index_path = self._sessions_dir / "index.json"
@@ -51,6 +57,8 @@ class SessionManager:
             raw = json.loads(self._index_path.read_text(encoding="utf-8"))
             for rk, entry in raw.items():
                 sessions = [SessionEntry(**s) for s in entry.get("sessions", [])]
+                for session in sessions:
+                    self._ensure_workspace_dirs(session.id)
                 self._index[rk] = RoutingEntry(
                     active_session_id=entry["active_session_id"],
                     sessions=sessions,
@@ -73,6 +81,7 @@ class SessionManager:
             if entry and entry.active_session_id:
                 for s in entry.sessions:
                     if s.id == entry.active_session_id:
+                        self._ensure_workspace_dirs(s.id)
                         return s
             return await self._create_session_locked(routing_key)
 
@@ -82,6 +91,7 @@ class SessionManager:
 
     async def _create_session_locked(self, routing_key: str) -> SessionEntry:
         session = SessionEntry()
+        self._ensure_workspace_dirs(session.id)
         entry = self._index.get(routing_key)
         if entry:
             sessions = list(entry.sessions) + [session]
@@ -95,6 +105,13 @@ class SessionManager:
         self._save_index()
         logger.info("created session %s for %s", session.id, routing_key)
         return session
+
+    def _ensure_workspace_dirs(self, session_id: str) -> None:
+        if self._workspace_dir is None:
+            return
+        session_dir = self._workspace_dir / "sessions" / session_id
+        for name in ("uploads", "outputs", "tmp"):
+            (session_dir / name).mkdir(parents=True, exist_ok=True)
 
     async def update_verbose(self, routing_key: str, verbose: bool) -> None:
         async with self._index_lock:

@@ -41,6 +41,21 @@ def adapter_setup():
 
 
 class TestDispatchAfterTurn:
+    def test_subcrew_step_callback_runs_synchronously(self, adapter_setup):
+        from xiaopaw.agents.skill_crew import _make_subcrew_step_callback
+        from xiaopaw.hook_framework.crew_adapter import set_current_adapter
+
+        adapter, _, collector = adapter_setup
+        set_current_adapter(adapter)
+        try:
+            _make_subcrew_step_callback()(object())
+            assert collector.count(EventType.AFTER_TURN) == 1
+            adapter._pending_deny = GuardrailDeny("sandbox_violation", "blocked")
+            with pytest.raises(GuardrailDeny):
+                _make_subcrew_step_callback()(object())
+        finally:
+            set_current_adapter(None)
+
     def test_dispatches_after_turn_event(self, adapter_setup):
         adapter, _, collector = adapter_setup
         adapter.on_before_llm(agent_role="orchestrator", messages=[])

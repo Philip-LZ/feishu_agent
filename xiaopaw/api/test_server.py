@@ -12,8 +12,15 @@ from xiaopaw.api.capture_sender import CaptureSender
 from xiaopaw.api.schemas import TestRequest
 from xiaopaw.models import InboundMessage
 from xiaopaw.observability.trace import new_trace_id
+from xiaopaw.runner import Runner
+from xiaopaw.session.manager import SessionManager
 
 logger = logging.getLogger(__name__)
+
+RUNNER_KEY = web.AppKey("runner", Runner)
+SENDER_KEY = web.AppKey("sender", CaptureSender)
+SESSION_MGR_KEY = web.AppKey("session_mgr", SessionManager)
+TOKEN_KEY = web.AppKey("token", str)
 
 
 def create_test_app(
@@ -23,10 +30,10 @@ def create_test_app(
     token: str = "",
 ) -> web.Application:
     app = web.Application()
-    app["runner"] = runner
-    app["sender"] = sender or CaptureSender()
-    app["session_mgr"] = session_mgr
-    app["token"] = token
+    app[RUNNER_KEY] = runner
+    app[SENDER_KEY] = sender or CaptureSender()
+    app[SESSION_MGR_KEY] = session_mgr
+    app[TOKEN_KEY] = token
 
     app.router.add_post("/api/test/message", _handle_message)
     app.router.add_delete("/api/test/sessions", _handle_clear)
@@ -35,7 +42,7 @@ def create_test_app(
 
 
 def _check_auth(request: web.Request) -> bool:
-    token = request.app.get("token", "")
+    token = request.app.get(TOKEN_KEY, "")
     if not token:
         return True
     auth = request.headers.get("Authorization", "")
@@ -52,9 +59,9 @@ async def _handle_message(request: web.Request) -> web.Response:
     except Exception as exc:
         return web.json_response({"error": str(exc)}, status=422)
 
-    runner = request.app["runner"]
-    capture: CaptureSender = request.app["sender"]
-    session_mgr = request.app.get("session_mgr")
+    runner = request.app[RUNNER_KEY]
+    capture: CaptureSender = request.app[SENDER_KEY]
+    session_mgr = request.app.get(SESSION_MGR_KEY)
 
     msg_id = req.msg_id or f"test_{uuid.uuid4().hex[:12]}"
     future = capture.register(msg_id)
@@ -96,7 +103,7 @@ async def _handle_clear(request: web.Request) -> web.Response:
     if not _check_auth(request):
         return web.json_response({"error": "unauthorized"}, status=401)
 
-    session_mgr = request.app.get("session_mgr")
+    session_mgr = request.app.get(SESSION_MGR_KEY)
     if session_mgr:
         await session_mgr.clear_all()
 

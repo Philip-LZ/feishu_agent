@@ -174,7 +174,7 @@ class TestDenyObservability:
             )
 
             with pytest.raises(GuardrailDeny) as exc_info:
-                asyncio.get_event_loop().run_until_complete(step_cb(action))
+                step_cb(action)
 
             assert "sandbox_violation" in str(exc_info.value)
             assert adapter._pending_deny is None
@@ -210,6 +210,6 @@ class TestDenyObservability:
                 result="search results",
             )
 
-            asyncio.get_event_loop().run_until_complete(step_cb(action))
+            step_cb(action)
         finally:
             set_current_adapter(None)

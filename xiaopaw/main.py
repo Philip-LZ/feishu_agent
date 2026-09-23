@@ -43,13 +43,15 @@ async def main() -> None:
     from xiaopaw.runner import Runner
     from xiaopaw.session.manager import SessionManager
 
+    workspace_dir = Path(cfg.workspace)
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+
     session_mgr = SessionManager(
         data_dir=data_dir,
         max_active_sessions=cfg.session.max_active_sessions,
+        workspace_dir=workspace_dir,
     )
 
-    workspace_dir = Path(cfg.workspace)
-    workspace_dir.mkdir(parents=True, exist_ok=True)
     ctx_dir = data_dir / "ctx"
 
     # Workspace init: copy template files from workspace-init/ if missing (fresh user).
@@ -94,7 +96,6 @@ async def main() -> None:
         sender=sender,
         workspace_dir=workspace_dir,
         ctx_dir=ctx_dir,
-        db_dsn=cfg.memory.db_dsn,
         max_history_turns=cfg.session.max_history_turns,
         sandbox_url=cfg.sandbox.url,
         flags=cfg.feature_flags,
@@ -120,6 +121,7 @@ async def main() -> None:
         max_queue_size=cfg.runner.max_queue_size,
         data_dir=data_dir,
         hook_registry=hook_registry,
+        db_dsn=cfg.memory.db_dsn,
     )
 
     # Start metrics server

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -118,4 +119,6 @@ def load_config(path: Path) -> AppConfig:
     if not path.exists():
         raise FileNotFoundError(f"config file not found: {path}")
     raw: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if db_dsn := os.environ.get("MEMORY_DB_DSN"):
+        raw.setdefault("memory", {})["db_dsn"] = db_dsn
     return AppConfig(**raw)

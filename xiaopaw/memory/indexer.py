@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from functools import cache
@@ -36,7 +37,20 @@ async def async_index_turn(
     turn_ts: int,
     db_dsn: str,
 ) -> None:
-    """Extract summary, embed, and upsert into pgvector. Fire-and-forget safe."""
+    """Index a turn without blocking the message queue."""
+    await asyncio.to_thread(
+        _index_turn, session_id, routing_key, user_message, assistant_reply, turn_ts, db_dsn
+    )
+
+
+def _index_turn(
+    session_id: str,
+    routing_key: str,
+    user_message: str,
+    assistant_reply: str,
+    turn_ts: int,
+    db_dsn: str,
+) -> None:
     if not db_dsn:
         return
 

@@ -3,7 +3,6 @@
 - **版本**：v1.0-draft（2026-04-24）
 - **前置文档**：[12-hook-hardening.md](12-hook-hardening.md)（Hook 框架设计）、[10-testing.md](10-testing.md)（v2 测试策略）
 - **设计原则**：TDD 先行——本文档所有测试用例将在实现代码之前编写为 RED 测试
-- **课程对应**：第 33 课（Hook 框架集成到 XiaoPaw）
 - **用例总数**：122 个（82 单元 + 28 集成 + 12 边界/风险）
 
 ---
@@ -601,7 +600,7 @@ tests/
 
 ### 6.1 pending_deny 机制未在参考实现中体现
 
-**问题**：12-hook-hardening.md 2.5 节描述了 `pending_deny` 机制——CrewAI 的 `@before_tool_call` 内部吞掉异常，需要适配层 catch GuardrailDeny 并存到 `_pending_deny`，在下次 `step_callback` 时重新抛出。但参考实现 `crew_adapter.py`（m5l30/m5l32）中 `@before_tool_call` 直接使用 `registry.dispatch`（而非 `dispatch_gate`），且没有 `_pending_deny` 字段。
+**问题**：12-hook-hardening.md 2.5 节描述了 `pending_deny` 机制——CrewAI 的 `@before_tool_call` 内部吞掉异常，需要适配层 catch GuardrailDeny 并存到 `_pending_deny`，在下次 `step_callback` 时重新抛出。但参考实现 `crew_adapter.py`中 `@before_tool_call` 直接使用 `registry.dispatch`（而非 `dispatch_gate`），且没有 `_pending_deny` 字段。
 
 **影响**：如果 CrewAI 的 `@before_tool_call` 确实会吞异常，那么安全策略（SandboxGuard / PermissionGate）在 BEFORE_TOOL_CALL 上的 deny 将无法阻断工具执行。这是 v3 安全保证的核心缺口。
 
@@ -611,7 +610,7 @@ tests/
 
 ### 6.2 参考实现中 `@before_tool_call` 使用 dispatch 而非 dispatch_gate
 
-**问题**：m5l32 的 `crew_adapter.py` 第 100-112 行，`@before_tool_call` handler 中使用的是 `registry.dispatch`（观测模式）而非 `registry.dispatch_gate`（拦截模式）。这与 12-hook-hardening.md 4.4 节描述的 "BEFORE_TOOL_CALL 执行链使用 dispatch_gate" 不一致。
+**问题**：安全策略参考实现的 `crew_adapter.py` 第 100-112 行，`@before_tool_call` handler 中使用的是 `registry.dispatch`（观测模式）而非 `registry.dispatch_gate`（拦截模式）。这与 12-hook-hardening.md 4.4 节描述的 "BEFORE_TOOL_CALL 执行链使用 dispatch_gate" 不一致。
 
 **影响**：安全策略（SandboxGuard / PermissionGate）和成本围栏（CostGuard.before_tool_handler）都注册在 BEFORE_TOOL_CALL 上，但如果使用 dispatch（非 gate），它们抛出的 GuardrailDeny 会被吞掉，无法阻断工具执行。
 

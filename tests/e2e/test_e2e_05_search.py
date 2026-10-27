@@ -1,8 +1,8 @@
 """E2E-05: Search skill end-to-end.
 
-Covers: L12 (Function Calling), L13 (BaseTool args_schema),
-        L16 (SkillLoaderTool progressive disclosure -> Sub-Crew),
-        L17 (Main -> Sub two-layer architecture)
+Covers: Function Calling, BaseTool args_schema,
+        SkillLoaderTool progressive disclosure -> Sub-Crew,
+        Main -> Sub two-layer architecture
 Tier: T2 (LLM + Sandbox)
 """
 

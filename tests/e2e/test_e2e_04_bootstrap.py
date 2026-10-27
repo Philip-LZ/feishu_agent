@@ -1,7 +1,7 @@
 """E2E-04: Bootstrap persona and user profile loading.
 
-Covers: L18 (Bootstrap 4-file preload, <soul>/<user> XML injection),
-        L22 (build_bootstrap_prompt)
+Covers: Bootstrap 4-file preload, <soul>/<user> XML injection,
+        build_bootstrap_prompt
 Tier: T1 (real LLM)
 """
 

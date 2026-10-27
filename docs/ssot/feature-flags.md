@@ -15,7 +15,7 @@
 | F4 | `enable_memory_save_filelock` | bool | `true` | H9 并发覆盖 | 低（关闭=v1） | ✅ | `xiaopaw_memory_save_timeout_total` |
 | F5 | `enable_feishu_rate_limit_aware` | bool | `true` | H6 429 识别 | 低（关闭=v1） | ✅ | `xiaopaw_feishu_rate_limit_total` |
 | F6 | `enable_trace_id` | bool | `true` | 横切（观测） | 低 | ❌（ContextVar 已嵌入各模块） | 全部指标的 exemplar |
-| F7 | `enable_mcp_whitelist` | bool | `true`（prod） / `false`（dev 教学） | T1 Prompt Injection → sandbox 逃逸 | **高** | ❌（SkillLoaderTool 初始化时固化） | `xiaopaw_mcp_tool_filtered_total` |
+| F7 | `enable_mcp_whitelist` | bool | `true`（prod） / `false`（dev） | T1 Prompt Injection → sandbox 逃逸 | **高** | ❌（SkillLoaderTool 初始化时固化） | `xiaopaw_mcp_tool_filtered_total` |
 | F8 | `enable_memory_save_filter` | bool | `true` | T2 Memory Poisoning | **中高** | ✅ | `xiaopaw_memory_save_blocked_total` |
 | F9 | `enable_webhook_replay_cache` | bool | `true` | T3 飞书 webhook 重放（注：WS 模式 SDK 无验签，这是应用层防御） | **高** | ✅ | `xiaopaw_webhook_replay_hit_total` |
 | F10 | `enable_inbound_rate_limit` | bool | `true` | T7 DoS | 中 | ✅ | `xiaopaw_rate_limited_total` |
@@ -125,7 +125,7 @@ feature_flags:
   enable_trace_id:                 true
 
   # 安全
-  enable_mcp_whitelist:            true   # 教学 demo 可改 false
+  enable_mcp_whitelist:            true   # 本地 demo 可改 false
   enable_memory_save_filter:       true
   enable_webhook_replay_cache:     true   # v2.1：原 enable_webhook_signature 改名
   enable_inbound_rate_limit:       true

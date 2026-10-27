@@ -19,7 +19,6 @@
   - [07-security.md §19](07-security.md) — 安全测试清单
   - [test-cases-for-known-risks.md](test-cases-for-known-risks.md) — 26 组已知风险测试用例（v2.1 新增）
   - [ssot/feature-flags.md](ssot/feature-flags.md) · [ssot/threats.md](ssot/threats.md) · [ssot/ports.md](ssot/ports.md) — SSOT 权威清单
-  - [test-design-course22.md (v1)](../../xiaopaw-with-memory/docs/test-design-course22.md) — v1 对照
 - **基线**：v1 实测 642 单元 / 29 集成 / 覆盖率 86% / 4 失败用例
 - **v2 目标**：≥720 单元 / ≥88% 全局覆盖 / 核心模块 ≥90% / 失败清零 / 5 组故障注入齐备
 
@@ -235,7 +234,7 @@ tests/
 │   └── utils/
 │       └── test_retry.py
 ├── integration/
-│   ├── test_course22_cases.py       # v1 保留的 Group U/V/W/X/Y
+│   ├── 旧版端到端用例               # v1 保留的 Group U/V/W/X/Y
 │   ├── test_webhook_signature.py    @feishu
 │   ├── test_replay_e2e.py           @feishu
 │   ├── test_mcp_whitelist_e2e.py    @sandbox
@@ -375,7 +374,7 @@ def _check_pgvector(request):
 
 ### 4.3 v1 保留的 Group U/V/W/X/Y
 
-v1 `test_course22_cases.py` 的 11 个端到端 case（见 test-design-course22.md）**全部保留**，作为"教学意图回归护栏"。每次结构重构必跑，确保第 22 课演示行为不破。
+v1 的 11 个端到端 case 全部保留，作为行为回归护栏。每次结构重构必跑，确保已有功能不被破坏。
 
 ---
 
@@ -1458,4 +1457,3 @@ python scripts/verify_metrics.py      # v2.1：8 指标齐全校验
 - [05-concurrency.md §12](05-concurrency.md) — 调试工具与复现方法
 - [07-security.md §19](07-security.md) — 安全测试清单与对抗样本
 - [08-deployment.md](08-deployment.md) — CI/CD workflow YAML 细节（本文不涉及）
-- [test-design-course22.md (v1)](../../xiaopaw-with-memory/docs/test-design-course22.md) — v1 对照

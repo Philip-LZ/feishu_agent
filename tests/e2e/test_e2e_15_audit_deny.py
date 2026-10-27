@@ -1,8 +1,8 @@
 """E2E-15: Audit log + GuardrailDeny propagation chain.
 
-Covers: L32 (SecurityAuditLogger append-only JSONL, SESSION_END summary),
-        L31 (pending_deny delayed re-raise, dispatch_gate order),
-        L30 (AFTER_TOOL_CALL denied metadata)
+Covers: SecurityAuditLogger append-only JSONL, SESSION_END summary,
+        pending_deny delayed re-raise, dispatch_gate order,
+        AFTER_TOOL_CALL denied metadata
 Tier: T5 + T6
 """
 

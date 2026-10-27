@@ -1,16 +1,12 @@
 """Hook 事件分发引擎 —— 5+2 事件体系的核心。
 
-【课程对应】
-- L30《项目实战 3：5+2 事件体系 + Langfuse 全链路》：本文件搭起整个加固层的"零侵入骨架"
-- L33《项目实战 5：系统加固》第三节"HookRegistry 的两套机制"
-
 【职责】
 1. 定义 5+2 事件类型（EventType）
 2. 定义 Hook 上下文（HookContext，只读 dataclass）
 3. 提供两套分发机制：dispatch（报警器） + dispatch_gate（保险丝）
 4. 定义 GuardrailDeny 异常（唯一能穿透 dispatch_gate 的异常）
 
-【教学要点】
+【设计要点】
 - 两套分发对应两段 hooks.yaml：观测层用 dispatch（异常吞掉），策略层用 dispatch_gate（GuardrailDeny 阻断）
 - HookContext 是 frozen 的，tool_input/metadata 是 MappingProxyType——Handler 只能读不能改
 """
@@ -143,7 +139,7 @@ class HookRegistry:
 
         【注册顺序就是执行顺序】
         HookLoader 严格按 hooks.yaml 中的声明顺序调用 register()，
-        因此 yaml 里的行序直接决定运行时的执行链路（参见 33课课文"约束二/三"）。
+        因此 yaml 里的行序直接决定运行时的执行链路。
         """
         self._handlers[event_type].append((handler, fail_closed))
         self._handler_names[event_type].append(

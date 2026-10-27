@@ -1,7 +1,5 @@
 """LoopDetector —— 通过状态哈希去重检测循环。
 
-【课程对应】L31《项目实战 3》第三策略
-
 【核心思想】
 Agent 卡死时的典型特征：连续 N 次工具调用返回相同结果，或连续 N 轮 LLM 输出相同。
 对状态做 MD5 哈希，如果连续 threshold（默认 3）次哈希值完全相同 → 判定循环 → deny。
@@ -17,7 +15,6 @@ Agent 卡死时的典型特征：连续 N 次工具调用返回相同结果，�
 【与 cost_guard 的顺序】
 hooks.yaml 里 loop_detector 在 cost_guard 之后——
 循环场景下 cost_guard 先算账，再让 loop_detector 决定是否阻断。
-（参见 L33 课文"约束三"）
 """
 
 import hashlib

@@ -3,12 +3,11 @@
 - **项目**：XiaoPaw v2（小爪子 v2）— 飞书本地工作助手（生产加固版）
 - **版本**：**v3**（2026-04-24 系统加固）/ v2.1（2026-04-19 升级）
 - **原始日期**：2026-04-17（v2.0-draft）
-- **前身**：`/root/course/code/xiaopaw-with-memory/`（第 22 课教学示例）
 - **改造依据**：
   - 《01_Review报告_xiaopaw-with-memory.md》：4 CRITICAL + 10 HIGH + 11 MEDIUM + 3 LOW 缺陷清单
   - 《02_重构设计文档_xiaopaw-with-memory_v2.md》：基于 4 路 sub-agent review 的方案
   - **v2.1 新增**：5 路文档 review 发现的 36 个问题 + Phase 0 SDK/并发验证报告
-- **设计底线**：保留课程 L18–L22 全部教学意图（三层记忆架构 / `@before_llm_call` / Bootstrap 四件套 / 文件系统记忆写通道 / pgvector 混合检索），仅加"生产外衣"。
+- **设计底线**：保留三层记忆架构、`@before_llm_call`、Bootstrap 四件套、文件系统记忆写通道和 pgvector 混合检索，在此基础上增加生产加固。
 
 ---
 
@@ -60,7 +59,7 @@
 |---|---|---|
 | 单元测试 | 188（shared_hooks 106 + hook_framework 64 + v3_fixes 18）| tests/unit/shared_hooks/ + tests/unit/hook_framework/ |
 | 集成测试 | 40（hook_chain / security_chain / adapter / two_layer_config / deny_flow / trace_quality / deny_observability）| tests/integration/ |
-| E2E | 65 用例 / 15 场景 + 2 persona（覆盖 L8-L22 + L30-L32）| tests/e2e/ |
+| E2E | 65 用例 / 15 场景 + 2 persona（覆盖主要功能）| tests/e2e/ |
 | **合计** | **293** | |
 
 ### E2E 验证与修复
@@ -99,7 +98,7 @@
 | ⭐⭐ | [09-config.md](docs/09-config.md) | 运维 / 实现 | config.yaml 字段、feature flags、env 优先级 |
 | ⭐⭐ | [10-testing.md](docs/10-testing.md) | 实现工程师 / QA | 测试分层、覆盖率要求、故障注入 |
 | ⭐ | [11-migration-v1-to-v2.md](docs/11-migration-v1-to-v2.md) | v1 既有部署方 | 从 v1 升级到 v2 的步骤 |
-| ⭐⭐⭐ | [12-hook-hardening.md](docs/12-hook-hardening.md) | 架构师 / 安全 / SRE | **【v3 新增】** Hook 框架 + 可靠性策略 + 安全策略（模块五集成） |
+| ⭐⭐⭐ | [12-hook-hardening.md](docs/12-hook-hardening.md) | 架构师 / 安全 / SRE | **【v3 新增】** Hook 框架 + 可靠性策略 + 安全策略 |
 | ⭐⭐ | [13-test-design-hook-hardening.md](docs/13-test-design-hook-hardening.md) | QA / 实现 | **【v3 新增】** 加固层测试设计（136 用例规格） |
 | ⭐⭐ | [14-e2e-test-design.md](docs/14-e2e-test-design.md) | QA / 实现 | **【v3 新增】** E2E 测试设计（15 场景覆盖矩阵） |
 | ⭐ | [15-e2e-fix-structured-log-and-timing.md](docs/15-e2e-fix-structured-log-and-timing.md) | 实现 | **【v3 新增】** E2E 发现的 5 个问题修复记录 |
@@ -130,14 +129,14 @@
 
 ### 1.1 定位
 
-**XiaoPaw v2**（小爪子 v2）是第 22 课教学示例的生产加固版本：
+**XiaoPaw v2**（小爪子 v2）在原有能力上增加生产加固：
 - **保留**：飞书本地助手（WebSocket 长连接、无需公网 IP、Skills 生态、AIO-Sandbox 执行隔离）
-- **保留**：三层记忆架构（L19 上下文 / L20 文件 / L21 搜索）
+- **保留**：三层记忆架构（上下文 / 文件 / 搜索）
 - **加固**：并发安全、容错降级、可观测、安全合规、测试覆盖
 
 ### 1.2 v1 vs v2 核心差异
 
-| 维度 | v1（教学示例） | v2（生产加固） |
+| 维度 | v1（原始版本） | v2（生产加固） |
 |---|---|---|
 | 凭证 | dummy 值随 `config.yaml` 入库 | `.env` 注入 + 正则+hash 安全校验 |
 | Session 锁 | `dict` 永驻（长跑 OOM） | `LRUCache(1000)` 自然淘汰 |
@@ -180,9 +179,9 @@
 
 v2 明确**不做**的事，避免范围蠕变：
 
-- ❌ 换掉 CrewAI / Qwen（是课程核心依赖，教学意义大）
-- ❌ 换掉 pgvector 为 Milvus / Qdrant（课程特意演示 PG 一张表搞定）
-- ❌ 改记忆写通道为数据库（课文刻意强调"文件系统记忆"）
+- ❌ 换掉 CrewAI / Qwen（保留现有核心依赖）
+- ❌ 换掉 pgvector 为 Milvus / Qdrant（复用 PostgreSQL 存储与检索能力）
+- ❌ 改记忆写通道为数据库（保留文件系统记忆）
 - ❌ 多 Agent 协调 / 多节点部署 / 跨副本并发（M4 范畴）
 - ❌ 替换 aiohttp 为 FastAPI（无必要）
 - ❌ 流式响应（飞书卡片 UI 限制）
@@ -230,9 +229,9 @@ v2 明确**不做**的事，避免范围蠕变：
 - **【v2 新增】MCP tool 白名单**：生产模式下 Sub-Crew 仅暴露 Skill 声明的 `allowed_tools`（见 [07-security.md §2](docs/07-security.md)）
 
 **三层记忆**：
-- **L19 上下文层**：`MemoryAwareCrew @CrewBase` + `@before_llm_call` hook
-- **L20 文件层**：`memory-save` / `skill-creator` / `memory-governance` Skills
-- **L21 搜索层**：`search_memory` Skill + pgvector 异步入库、混合检索
+- **上下文层**：`MemoryAwareCrew @CrewBase` + `@before_llm_call` hook
+- **文件层**：`memory-save` / `skill-creator` / `memory-governance` Skills
+- **搜索层**：`search_memory` Skill + pgvector 异步入库、混合检索
 
 ### 2.2 系统边界
 
@@ -596,7 +595,7 @@ xiaopaw_cron_dlq_total                               # Cron 死信
 **测试分层**（v3 更新，293 用例）：
 - **单元**（188 用例）：shared_hooks 106 + hook_framework 64 + v3_fixes 18
 - **集成**（40 用例）：hook_chain / security_chain / adapter / two_layer_config / deny_flow / trace_quality / deny_observability
-- **E2E**（65 用例 / 15 场景 + 2 persona）：覆盖 L8-L22 + L30-L32 全课程知识点
+- **E2E**（65 用例 / 15 场景 + 2 persona）：覆盖会话、技能、记忆、观测、可靠性与安全功能
 - **故障注入**（5 组）：ENOSPC / LLM 5xx / pgvector down / Skill 卡死 / 飞书 429
 - **安全**（含于 E2E + unit）：sandbox_guard 18 用例 / permission_gate 10 用例 / E2E-13~15 安全场景
 - **互斥正确性**（1 组）：100 并发 append 同 sid 无交叉
@@ -660,7 +659,7 @@ feature_flags:
   enable_memory_save_filelock: true         # H9
   enable_feishu_rate_limit_aware: true      # H6
   enable_trace_id: true                     # 横切
-  enable_mcp_whitelist: true                # T1（教学 demo 可关）
+  enable_mcp_whitelist: true                # T1（本地 demo 可关）
   enable_memory_save_filter: true           # T2
   enable_webhook_signature: true            # T3
   enable_inbound_rate_limit: true           # T7
@@ -686,7 +685,7 @@ feature_flags:
 
 ## 15. 验收标准（v2 G1-G7）
 
-> 量化指标均可在 CI/监控中自动验证。详见 [02_重构设计文档 v2 §1](../../../multi-agent/review_L22/02_重构设计文档_xiaopaw-with-memory_v2.md)。
+> 量化指标均可在 CI/监控中自动验证。详见 [设计总纲](DESIGN.md)。
 
 - **G1** 消除 4 个 Blocker；canary 72h 内存增长斜率 <1MB/h
 - **G2** 10 个 HIGH 缺陷全清；核心模块覆盖 ≥90%
@@ -713,7 +712,7 @@ DESIGN.md（本文）
  ├── 配置    → 09-config.md
  ├── 测试    → 10-testing.md
  ├── 迁移    → 11-migration-v1-to-v2.md
- ├── Hook加固 → 12-hook-hardening.md       ← 【v3 新增】模块五三层集成
+ ├── Hook加固 → 12-hook-hardening.md       ← 【v3 新增】观测、可靠性与安全三层集成
  ├── 加固测试 → 13-test-design-hook-hardening.md  ← 【v3 新增】136 用例规格
  ├── E2E设计  → 14-e2e-test-design.md       ← 【v3 新增】15 场景覆盖矩阵
  ├── E2E修复  → 15-e2e-fix-structured-log-and-timing.md  ← 【v3 新增】

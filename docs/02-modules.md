@@ -588,7 +588,7 @@ class MemoryAwareCrew:
 3. **`@before_llm_call` in-place 契约**（P0-新 BeforeHook）：必须 `messages[:] = ...` 或 `append/extend`，禁止 `context.messages = [...]`。依据见 [sdk-verification-report.md §2](sdk-verification-report.md)。
 4. **`context.llm.context_window_size` 不可依赖**（Phase 0 验证：`llm` 类型可能是 `str` alias，无任何属性）—— v2.1 改从 `self._ctx_window_tokens` 读配置固定值（默认 32000，由 `cfg.agent.context_window_tokens` 提供）。
 5. **FeatureFlags 通过参数注入**，内部条件分支决定是否启用 MCP 白名单等。
-6. **`@after_llm_call` 不使用**（课文 L19 已说明 CrewAI bug）。
+6. **`@after_llm_call` 不使用**（规避 CrewAI 的已知问题）。
 7. **构造函数 in-place 绑定 `self.routing_key`**（修 P1-12 遗漏）。
 
 **测试**（集成测试居多）：
@@ -762,7 +762,7 @@ def build_skill_crew(
     if flags and flags.enable_mcp_whitelist and allowed_tools:
         tools = [t for t in all_tools if t.name in allowed_tools]
     else:
-        tools = all_tools  # 教学模式：全开放
+        tools = all_tools  # 开发模式：全开放
 
     agent = Agent(
         role=f"Skill Executor ({skill_name})",
@@ -785,7 +785,7 @@ def build_skill_crew(
 
 ### 4.1 bootstrap（`xiaopaw/memory/bootstrap.py`）
 
-**职责**：L19 Bootstrap 阶段，读取 workspace 4 文件（soul/user/agent/memory.md）构建 Agent backstory。
+**职责**：Bootstrap 阶段，读取 workspace 4 文件（soul/user/agent/memory.md）构建 Agent backstory。
 
 **核心函数**：
 
@@ -821,7 +821,7 @@ def build_bootstrap_prompt(workspace_dir: Path) -> str:
 
 ### 4.2 context_mgmt（`xiaopaw/memory/context_mgmt.py`）
 
-**职责**：L19 上下文生命周期管理——剪枝、压缩、ctx.json 快照、raw.jsonl 审计。
+**职责**：上下文生命周期管理——剪枝、压缩、ctx.json 快照、raw.jsonl 审计。
 
 **核心函数**（接口同 v1，实现加固）：
 
@@ -942,7 +942,7 @@ def count_tokens(messages: list[dict]) -> int:
 
 ### 4.4 indexer（`xiaopaw/memory/indexer.py`）
 
-**职责**：L21 搜索层——每轮对话后异步提取摘要+向量化+入 pgvector。
+**职责**：搜索层——每轮对话后异步提取摘要+向量化+入 pgvector。
 
 **v2 关键变化**：
 
@@ -961,7 +961,7 @@ def _get_embed_client():
     return _get_llm_client()
 ```
 
-2. **`async_index_turn` 签名不变**（课程兼容），但由 Runner 包装为 Task：
+2. **`async_index_turn` 签名不变**（兼容已有调用方），但由 Runner 包装为 Task：
 
 ```python
 async def async_index_turn(
@@ -1074,7 +1074,7 @@ def is_image_payload(text: str) -> bool:
   - 写入 SKILL.md 前做 YAML 合法性验证
   - `scripts:` 路径白名单（不允许 `../`）
   - `load_skills.yaml` 更新使用 filelock
-- **memory-governance**：仅报告不自动执行（L20 CRITICAL 约束，保持）
+- **memory-governance**：仅报告不自动执行（保留仅报告约束）
 
 ### 7.5 Skill 清单（`skills/load_skills.yaml`）
 
@@ -1105,7 +1105,7 @@ skills:
 
 **`validator.py`**：Pydantic schema 校验 `config.yaml`；启动失败时给出明确错误字段路径。
 
-**`safety.py`**：凭证安全校验（正则+hash 弱密码 + `FORBIDDEN_DEFAULTS`）—— 见 [DESIGN.md §4 Phase 1](../../multi-agent/review_L22/02_重构设计文档_xiaopaw-with-memory_v2.md)
+**`safety.py`**：凭证安全校验（正则+hash 弱密码 + `FORBIDDEN_DEFAULTS`）—— 见 [DESIGN.md](../DESIGN.md)
 
 **`flags.py`**：FeatureFlags registry；每个 flag 对应 metric。
 

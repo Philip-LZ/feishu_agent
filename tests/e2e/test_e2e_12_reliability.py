@@ -1,7 +1,7 @@
 """E2E-12: Loop detection and cost guard.
 
-Covers: L31 (LoopDetector MD5 state hash threshold=3, CostGuard real-time billing +
-        budget threshold, dispatch_gate execution order, GuardrailDeny propagation)
+Covers: LoopDetector MD5 state hash threshold=3, CostGuard real-time billing +
+        budget threshold, dispatch_gate execution order, GuardrailDeny propagation
 Tier: T5 (LLM)
 """
 

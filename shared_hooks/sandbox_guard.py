@@ -1,9 +1,5 @@
 """SandboxGuard —— 确定性输入消毒（不依赖 LLM）。
 
-【课程对应】
-- L32《项目实战 4：三层安全》第一节"沙箱守卫"
-- L33《项目实战 5》：作为 hooks.yaml strategies 段第一个安全策略，fail_closed=True
-
 【核心思想：Prompt is advice, Hook is law】
 soul.md 里写"NEVER 执行 shell 命令"对 LLM 来说是"建议"——LLM 在任务压力下会违规。
 SandboxGuard 用 4 组硬编码正则在 BEFORE_TOOL_CALL 兜底拦截，命中即抛 GuardrailDeny。

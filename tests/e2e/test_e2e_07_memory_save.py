@@ -1,9 +1,9 @@
 """E2E-07: memory-save write + cross-session recall via Bootstrap.
 
-Covers: L20 (memory-save 4-step admission, Sub-Crew isolated write),
-        L16 (SkillLoaderTool progressive disclosure),
-        L18 (Bootstrap loads user.md — verified via cross-session recall),
-        L22 (three-layer memory integration)
+Covers: memory-save 4-step admission, Sub-Crew isolated write,
+        SkillLoaderTool progressive disclosure,
+        Bootstrap loads user.md — verified via cross-session recall,
+        three-layer memory integration
 Tier: T2 (LLM + Sandbox)
 
 Architecture: sandbox-docker-compose.yaml mounts ./data/workspace:/workspace:rw.

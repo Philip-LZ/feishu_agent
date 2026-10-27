@@ -1,7 +1,5 @@
 """结构化事件日志 —— 每个 Hook 事件输出一行 JSON 到 stderr。
 
-【课程对应】L30《项目实战 3》第二节"5+2 事件体系"的最简观测实现
-
 【设计要点】
 1. **每事件一行 JSON**：可被 fluentd / Loki / 自研日志管道直接消费，无需解析
 2. **挂在 hooks 段**（不是 strategies）：用 dispatch 而非 dispatch_gate，

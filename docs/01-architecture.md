@@ -231,7 +231,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    subgraph L19[L19 上下文层（单轮内）]
+    subgraph Context[上下文层（单轮内）]
         direction TB
         BS[Bootstrap 读取]
         BL[before_llm_call Hook]
@@ -243,7 +243,7 @@ flowchart LR
         BL --> RAW
     end
 
-    subgraph L20[L20 文件层（跨轮、持久化）]
+    subgraph Files[文件层（跨轮、持久化）]
         direction TB
         MSAVE[memory-save Skill\n四信号准入]
         SKC[skill-creator Skill\nSOP 固化]
@@ -255,7 +255,7 @@ flowchart LR
         GOV --> WS
     end
 
-    subgraph L21[L21 搜索层（跨 session、海量）]
+    subgraph Search[搜索层（跨 session、海量）]
         direction TB
         IDX[async_index_turn\n后台]
         EXTRACT[extract_summary_and_tags]
@@ -268,16 +268,16 @@ flowchart LR
         SEARCH --> PGV
     end
 
-    L19 -.每轮结束触发.-> L21
-    L20 -.提供 backstory 内容.-> L19
-    SEARCH -.召回历史片段.-> L19
+    Context -.每轮结束触发.-> Search
+    Files -.提供 backstory 内容.-> Context
+    SEARCH -.召回历史片段.-> Context
 ```
 
 **三层隔离规则**（见 [02-modules.md](02-modules.md) 和 [07-security.md](07-security.md)）：
 
-- **L19 → L21**：每轮 `run_and_index()` 结束后，Runner 注册 `_index_coroutine` 到 `_pending_index_tasks`（见 [05-concurrency.md](05-concurrency.md)）
-- **L20 写入**：仅 Sub-Crew 沙盒内执行，主 Agent 不持有写权限（课程核心设计）
-- **L21 查询**：强制 `routing_key` required + SkillLoader 校验拒绝覆盖（防跨用户）
+- **上下文 → 搜索**：每轮 `run_and_index()` 结束后，Runner 注册 `_index_coroutine` 到 `_pending_index_tasks`（见 [05-concurrency.md](05-concurrency.md)）
+- **文件记忆写入**：仅 Sub-Crew 沙盒内执行，主 Agent 不持有写权限
+- **搜索查询**：强制 `routing_key` required + SkillLoader 校验拒绝覆盖（防跨用户）
 
 ---
 
@@ -332,7 +332,7 @@ flowchart LR
 **边界 3：MCP tool 白名单**（v2 新增，[07-security.md §2](07-security.md)）
 - SKILL.md frontmatter 声明 `allowed_tools: [sandbox_execute_code, sandbox_file_operations, ...]`
 - Sub-Crew 构建时通过 `_filter_mcp_tools()` 仅暴露声明的 tools
-- `enable_mcp_whitelist: false` 可回到教学模式（所有 tool 开放）
+- `enable_mcp_whitelist: false` 可回到开发模式（所有 tool 开放）
 
 **边界 3：DB 权限最小化**
 - pgvector 使用独立 DB 用户 `xiaopaw_app`
@@ -414,7 +414,7 @@ flowchart LR
 **ADR-001：单节点部署作为 v2 的硬前提**
 
 - **决策**：v2 所有并发方案（filelock / asyncio.Lock / LRUCache）仅保证单节点正确性
-- **理由**：多节点涉及分布式锁、消息队列、session 一致性，工作量等同重写。课程 L22 也未涉及
+- **理由**：多节点涉及分布式锁、消息队列、session 一致性，工作量等同重写。当前版本仅支持单节点
 - **后果**：多节点需求等 M4 规划；文档明示（[DESIGN.md §2.4](../DESIGN.md)）
 - **备选**：若用户坚持多节点，Cron/memory-save 改用 PG advisory lock（项目已有 PG）
 
@@ -455,10 +455,10 @@ flowchart LR
 
 **ADR-007：MCP tool 白名单作为可选 feature flag**
 
-- **决策**：`enable_mcp_whitelist: true`（prod 默认）/ `false`（教学 demo 默认）
-- **理由**：课程演示版强调"Sub-Crew 全 MCP 工具开放 + backstory 行为约束"；生产版必须收紧为 Skill 声明白名单
-- **后果**：教学场景保持原样；生产场景 prompt injection 无法调用非声明 tools
-- **备选**：强制白名单（会破坏教学意图，拒绝）
+- **决策**：`enable_mcp_whitelist: true`（prod 默认）/ `false`（本地 demo 默认）
+- **理由**：原有实现采用"Sub-Crew 全 MCP 工具开放 + backstory 行为约束"；生产版必须收紧为 Skill 声明白名单
+- **后果**：开发场景保持原样；生产场景 prompt injection 无法调用非声明 tools
+- **备选**：强制白名单（会影响已有工具使用方式）
 
 **ADR-008：trace_id 覆盖率目标 85%（非 95%）**
 
@@ -479,16 +479,7 @@ flowchart LR
 - **决策**：不合并到 Phase 4（观测），独立 1.5 天
 - **理由**：威胁模型、PII 脱敏、凭证 runbook、入站速率限制、MCP 白名单是**独立的安全交付**，与观测无关
 - **后果**：工作量 +1.5 天；有独立的 `threat-model.md` / `compliance-baseline.md` 交付物
-- **备选**：推迟到 v2.1（课程质量要求不允许）
-
----
-
-## 7. 参考实现
-
-- **v1 教学示例**：`/root/course/code/xiaopaw-with-memory/`（作为对照组）
-- **课程正文**：`/root/course/multi-agent/18｜...md` 至 `22｜...md`
-- **v1 review**：`/root/course/multi-agent/review_L22/01_Review报告_xiaopaw-with-memory.md`
-- **v2 重构方案**：`/root/course/multi-agent/review_L22/02_重构设计文档_xiaopaw-with-memory_v2.md`
+- **备选**：推迟到 v2.1（当前版本需要修复）
 
 ---
 

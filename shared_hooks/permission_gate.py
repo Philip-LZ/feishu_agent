@@ -1,9 +1,5 @@
 """PermissionGate —— 工具权限网关（Deny > Warn > Allow）。
 
-【课程对应】
-- L32《项目实战 4》第二节"权限网关"
-- L33《项目实战 5》：strategies 段第二个安全策略，与 sandbox_guard 共享 audit_logger
-
 【三级权限模型】
 - deny  ：抛 GuardrailDeny，直接拦截
 - warn  ：放行 + 写审计日志（"调用了，但记录在案"）

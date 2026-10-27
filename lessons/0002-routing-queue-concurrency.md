@@ -1,7 +1,7 @@
-# 第二课：`routing_key`、队列与并发边界
+# `routing_key`、队列与并发边界
 
 > **预计时间：** 25 分钟  
-> **本课目标：** 理解 XiaoPaw 为什么既不是全局串行，也不是所有消息完全并行；能从当前源码判断它真正保证了什么、没有保证什么。
+> **阅读目标：** 理解 XiaoPaw 为什么既不是全局串行，也不是所有消息完全并行；能从当前源码判断它真正保证了什么、没有保证什么。
 
 ## 1. 先确定并发单位
 
@@ -126,7 +126,7 @@ A3：被丢弃并写 warning
 5. 新消息留在无人持有的旧 queue 中
 ```
 
-这是基于当前代码的静态分析结论；由于当前环境没有安装 pytest，本课没有把它写成可执行回归测试。面试学习中最重要的不是假装项目没有缺陷，而是能准确说清：设计意图、当前证据和残余风险分别是什么。
+这是基于当前代码的静态分析结论；由于当前环境没有安装 pytest，本文没有把它写成可执行回归测试。面试学习中最重要的不是假装项目没有缺陷，而是能准确说清：设计意图、当前证据和残余风险分别是什么。
 
 ## 8. 现有测试证明到哪里
 
@@ -144,7 +144,7 @@ A3：被丢弃并写 warning
 
 测试名称出现在设计文档里，不等于测试文件真实存在。以后阅读 `docs/` 时，都要回到 `tests/` 目录核对。
 
-## 9. 本课速记
+## 9. 要点速记
 
 ```text
 routing_key = 并发与顺序的隔离单位，不是 session id
@@ -165,7 +165,7 @@ idle timeout = 回收资源，但带来退出/新消息竞态
 4. 对照 `runner.py`，复述第 7 节竞态中的五个步骤。你认为真正需要原子化的是哪两类操作？
 5. 在 `tests/` 中确认文档列出的五个 Runner 并发单元测试是否真实存在。
 
-完成后把答案发给我。我会先做课程答疑，再进入第三课 Session、上下文与记忆。
+相关主题：Session、上下文与记忆，见[技术说明](0003-session-context-memory.md)。
 
 ## 延伸阅读
 
@@ -173,4 +173,4 @@ idle timeout = 回收资源，但带来退出/新消息竞态
 - routing key：[`xiaopaw/feishu/session_key.py`](../xiaopaw/feishu/session_key.py)
 - 设计文档：[`docs/05-concurrency.md`](../docs/05-concurrency.md)
 - Python 官方资料：[asyncio queues](https://docs.python.org/3/library/asyncio-queue.html)
-- 本课速查：[`reference/0002-runner-concurrency-cheatsheet.md`](../reference/0002-runner-concurrency-cheatsheet.md)
+- 相关速查：[`reference/0002-runner-concurrency-cheatsheet.md`](../reference/0002-runner-concurrency-cheatsheet.md)

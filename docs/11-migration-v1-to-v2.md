@@ -109,7 +109,7 @@ python scripts/calibrate_tokenizer.py \
 校准报告决定：
 - 首选：`dashscope.get_tokenizer("qwen-max")` 可用 → FeatureFlag `token_counter_mode=qwen_official`
 - 次选：HuggingFace `Qwen/Qwen2-7B` tokenizer → 本地加载
-- 兜底：`len // 2` → FeatureFlag `token_counter_mode=rough`（教学 demo 默认）
+- 兜底：`len // 2` → FeatureFlag `token_counter_mode=rough`（本地 demo 默认）
 
 ### 2.4 备份与 force-push 通告
 
@@ -365,7 +365,7 @@ feature_flags:
   enable_cron_filelock: true
   enable_memory_save_filelock: true
   enable_feishu_rate_limit_aware: true
-  enable_mcp_whitelist: true             # v2.1 默认 true；教学 demo 可关
+  enable_mcp_whitelist: true             # v2.1 默认 true；本地 demo 可关
   enable_memory_save_filter: true
   # v2.1 改名：原 enable_webhook_signature → enable_webhook_replay_cache
   # 原因：WS 模式 lark-oapi 无 encrypt_key 验签 API；应用层用 event_id LRU+TTL 做重放防护
@@ -522,7 +522,7 @@ TC 编号引用 [`test-cases-for-known-risks.md`](./test-cases-for-known-risks.m
 
 ### 9.1 Phase 映射（v2.1：重命名避免同名冲突）
 
-v2 的重构按 6 个**开发 Phase** 交付代码（见 [重构设计 v2](../../../multi-agent/review_L22/02_重构设计文档_xiaopaw-with-memory_v2.md) §2）；迁移本身走独立的 **Rollout Phase** 编号。为避免两套 Phase 互相混淆，v2.1 明确重命名：
+v2 的重构按 6 个**开发 Phase** 交付代码（见 [设计总纲](../DESIGN.md) §2）；迁移本身走独立的 **Rollout Phase** 编号。为避免两套 Phase 互相混淆，v2.1 明确重命名：
 
 | v2.1 开发 Phase（代码交付） | 对应 Rollout Phase（部署步骤） | 时长 |
 |---|---|---|
@@ -728,14 +728,14 @@ A: 不会。v1 代码路径在 `upsert_memory` 时必然填充 `routing_key`（�
 
 A: 飞书 WebSocket 在客户端断连后，服务端会缓存事件一段时间（通常 ≥ 5 分钟）。v2 重连后事件会重推。实际观察到的"丢失"大多是 v2 启动失败导致超出缓冲窗口。因此 Phase 0 canary 24h smoke 至关重要。
 
-### Q4: 教学 demo 环境要不要改成 v2？
+### Q4: 本地 demo 环境要不要改成 v2？
 
-A: 不建议。v2 多了凭证自检 / 验签 / MCP 白名单等机制，教学场景会徒增门槛。保留 v1 作"课程示例"，v2 作"生产加固参考"。两者代码目录并行存在。
+A: 不建议。v2 多了凭证自检 / 验签 / MCP 白名单等机制，开发场景会徒增门槛。保留 v1 作"旧版示例"，v2 作"生产加固参考"。两者代码目录并行存在。
 
 ### Q5: SKILL.md 是否必须补齐 `allowed_tools`？
 
 A: 取决于 `feature_flags.enable_mcp_whitelist`：
-- `false`（默认，教学兼容）：不必补；v2 行为与 v1 一致（全量 MCP）
+- `false`（默认，兼容旧版）：不必补；v2 行为与 v1 一致（全量 MCP）
 - `true`（prod 推荐）：必须补；缺失的 Skill 会在 SkillLoader 初始化时报 warning，运行时对该 Skill 降级为"无 MCP 工具"（Agent 只能从 SKILL.md 自我推理）
 
 ### Q6: 凭证从 `config.yaml` 移到 `.env` / docker secrets，历史仓库里的凭证怎么办？

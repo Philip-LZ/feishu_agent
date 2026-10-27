@@ -1,7 +1,7 @@
 """E2E-08: search_memory semantic search + degradation.
 
-Covers: L21 (pgvector hybrid search vector*0.7 + fulltext*0.3, 3-level degradation),
-        L22 (search_memory skill, async background indexing)
+Covers: pgvector hybrid search vector*0.7 + fulltext*0.3, 3-level degradation,
+        search_memory skill, async background indexing
 Tier: T3 (LLM + Sandbox + pgvector)
 """
 

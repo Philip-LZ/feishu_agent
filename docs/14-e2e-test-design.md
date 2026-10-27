@@ -1,16 +1,16 @@
-# 14. E2E 测试设计——课程全覆盖版（15 条）
+# 14. E2E 测试设计——功能覆盖（15 条）
 
 - **版本**：v2.0（2026-05-01）
 - **前置文档**：[12-hook-hardening.md](12-hook-hardening.md) / [13-test-design-hook-hardening.md](13-test-design-hook-hardening.md)
-- **设计原则**：本课是整个课程的最后一节实战课，E2E 测试须覆盖 L8—L22 + L30—L32 全部单人可测知识点
-- **合并策略**：每条用例通过多步骤覆盖多个课程知识点，从功能维度合并为 15 条
+- **设计原则**：E2E 测试覆盖会话、技能、记忆、观测、可靠性与安全的主要行为
+- **合并策略**：每条用例通过多步骤覆盖多个功能点，从功能维度合并为 15 条
 
 ---
 
 ## 目录
 
 1. [测试基础设施](#1-测试基础设施)
-2. [课程知识点覆盖矩阵](#2-课程知识点覆盖矩阵)
+2. [功能点覆盖矩阵](#2-功能点覆盖矩阵)
 3. [E2E-01~02：会话管理与路由隔离](#3-e2e-0102会话管理与路由隔离)
 4. [E2E-03~04：对话能力与 Bootstrap](#4-e2e-0304对话能力与-bootstrap)
 5. [E2E-05~06：技能调用与工具链](#5-e2e-0506技能调用与工具链)
@@ -73,26 +73,26 @@ DELETE /api/test/sessions
 
 ---
 
-## 2. 课程知识点覆盖矩阵
+## 2. 功能点覆盖矩阵
 
-| 课程 | 核心知识点 | 测试编号 |
+| 功能 | 核心验证点 | 测试编号 |
 |------|-----------|---------|
-| L8 定义 Task | expected_output、结构化输出 | 03, 04 |
-| L9 定义 Process | TaskOutput、context 传递 | 03 |
-| L12 工具设计 | Function Calling、构造性错误、contextvars 隔离 | 02, 05 |
-| L13 自定义工具 | BaseTool、args_schema、错误映射 | 05 |
-| L14 MCP 协议 | MCPServerHTTP、自动发现 | 06 |
-| L15 代码解释器 | 沙箱隔离执行、代码→推理循环、无头浏览器 | 06 |
-| L16 Skills 生态 | SkillLoaderTool、渐进式披露、Sub-Crew、reference/task 类型 | 05, 06, 07 |
-| L17 项目实战2 | 斜杠命令、会话管理、路由隔离、两层架构 | 01, 02, 03, 05 |
-| L18 Prompt→Harness | Bootstrap 预加载、上下文治理（加法/减法） | 04, 07 |
-| L19 上下文生命周期 | 剪枝、压缩、会话持久化、ctx.json/raw.jsonl | 03, 09 |
-| L20 文件记忆 | memory-save 四步准入、Sub-Crew 隔离写入 | 07, 13 |
-| L21 搜索记忆 | pgvector 混合搜索（vector×0.7 + fulltext×0.3）、三级降级 | 08 |
-| L22 项目实战3 | 三层记忆集成、@before_llm_call 恢复 | 07, 08 |
-| L30 可观测性 | 5+2 事件体系、Langfuse trace/span/generation、结构化日志 | 10, 11 |
-| L31 可靠性 | loop_detector、cost_guard、pending_deny、dispatch_gate | 12, 15 |
-| L32 安全 | sandbox_guard、permission_gate、审计日志、三层安全 | 13, 14, 15 |
+| 定义 Task | expected_output、结构化输出 | 03, 04 |
+| 定义 Process | TaskOutput、context 传递 | 03 |
+| 工具设计 | Function Calling、构造性错误、contextvars 隔离 | 02, 05 |
+| 自定义工具 | BaseTool、args_schema、错误映射 | 05 |
+| MCP 协议 | MCPServerHTTP、自动发现 | 06 |
+| 代码解释器 | 沙箱隔离执行、代码→推理循环、无头浏览器 | 06 |
+| Skills 生态 | SkillLoaderTool、渐进式披露、Sub-Crew、reference/task 类型 | 05, 06, 07 |
+| 会话与路由 | 斜杠命令、会话管理、路由隔离、两层架构 | 01, 02, 03, 05 |
+| Prompt→Harness | Bootstrap 预加载、上下文治理（加法/减法） | 04, 07 |
+| 上下文生命周期 | 剪枝、压缩、会话持久化、ctx.json/raw.jsonl | 03, 09 |
+| 文件记忆 | memory-save 四步准入、Sub-Crew 隔离写入 | 07, 13 |
+| 搜索记忆 | pgvector 混合搜索（vector×0.7 + fulltext×0.3）、三级降级 | 08 |
+| 记忆集成 | 三层记忆集成、@before_llm_call 恢复 | 07, 08 |
+| 可观测性 | 5+2 事件体系、Langfuse trace/span/generation、结构化日志 | 10, 11 |
+| 可靠性 | loop_detector、cost_guard、pending_deny、dispatch_gate | 12, 15 |
+| 安全 | sandbox_guard、permission_gate、审计日志、三层安全 | 13, 14, 15 |
 
 ---
 
@@ -100,7 +100,7 @@ DELETE /api/test/sessions
 
 ### E2E-01: 斜杠命令全流程
 
-**覆盖**: L17（斜杠命令拦截、会话生命周期、SessionManager）
+**覆盖**: 斜杠命令拦截、会话生命周期、SessionManager
 **层级**: T0（No LLM，echo agent）
 
 **步骤**:
@@ -125,7 +125,7 @@ DELETE /api/test/sessions
 
 ### E2E-02: 路由隔离与并发安全
 
-**覆盖**: L17（per-routing_key 串行队列、workspace 隔离）、L12（contextvars 隔离）
+**覆盖**: per-routing_key 串行队列、workspace 隔离、contextvars 隔离
 **层级**: T0（No LLM）
 
 **步骤**:
@@ -145,7 +145,7 @@ DELETE /api/test/sessions
 
 ### E2E-03: 多轮对话与上下文生命周期
 
-**覆盖**: L8（Task expected_output）、L9（TaskOutput context 传递）、L17（/new）、L18（上下文治理）、L19（会话持久化 + 重置）
+**覆盖**: Task expected_output、TaskOutput context 传递、/new、上下文治理、会话持久化 + 重置
 **层级**: T1（真实 LLM）
 
 **步骤**:
@@ -165,7 +165,7 @@ DELETE /api/test/sessions
 
 ### E2E-04: Bootstrap 人设与用户画像加载
 
-**覆盖**: L18（Bootstrap 四文件预加载、`<soul>`/`<user>` XML 注入）、L22（build_bootstrap_prompt）
+**覆盖**: Bootstrap 四文件预加载、`<soul>`/`<user>` XML 注入、build_bootstrap_prompt
 **层级**: T1（真实 LLM）
 
 **步骤**:
@@ -185,7 +185,7 @@ DELETE /api/test/sessions
 
 ### E2E-05: 搜索技能端到端
 
-**覆盖**: L12（Function Calling 调用工具）、L13（BaseTool args_schema）、L16（SkillLoaderTool 渐进式披露 → Sub-Crew 工厂）、L17（两层架构 Main→Sub）
+**覆盖**: Function Calling 调用工具、BaseTool args_schema、SkillLoaderTool 渐进式披露 → Sub-Crew 工厂、两层架构 Main→Sub
 **层级**: T2（LLM + Sandbox）
 **前置**: sandbox 运行中
 
@@ -204,7 +204,7 @@ DELETE /api/test/sessions
 
 ### E2E-06: 网页浏览 + 代码执行技能
 
-**覆盖**: L14（MCP 协议、MCPServerHTTP）、L15（无头浏览器、代码解释器、沙箱隔离执行）、L16（task 类型技能）
+**覆盖**: MCP 协议、MCPServerHTTP、无头浏览器、代码解释器、沙箱隔离执行、task 类型技能
 **层级**: T2（LLM + Sandbox）
 **前置**: sandbox 运行中
 
@@ -223,7 +223,7 @@ DELETE /api/test/sessions
 
 ### E2E-07: memory-save 写入与跨 session 持久化
 
-**覆盖**: L20（memory-save 四步准入、Sub-Crew 隔离写入）、L22（三层记忆集成、@before_llm_call 恢复）、L18（Bootstrap 加载 user.md）
+**覆盖**: memory-save 四步准入、Sub-Crew 隔离写入、三层记忆集成、@before_llm_call 恢复、Bootstrap 加载 user.md
 **层级**: T2（LLM + Sandbox）
 **前置**: sandbox 运行中
 
@@ -243,7 +243,7 @@ DELETE /api/test/sessions
 
 ### E2E-08: search_memory 语义搜索与降级
 
-**覆盖**: L21（pgvector 混合搜索 vector×0.7 + fulltext×0.3、三级降级策略）、L22（search_memory 技能、异步后台索引）
+**覆盖**: pgvector 混合搜索 vector×0.7 + fulltext×0.3、三级降级策略、search_memory 技能、异步后台索引
 **层级**: T3（LLM + Sandbox + pgvector）
 **前置**: sandbox + pgvector 运行中
 
@@ -267,7 +267,7 @@ DELETE /api/test/sessions
 
 ### E2E-09: 长对话剪枝与压缩
 
-**覆盖**: L19（PRUNE_KEEP_TURNS=10 剪枝、COMPRESS_THRESHOLD=0.45 压缩、ctx.json 持久化、raw.jsonl 审计日志）
+**覆盖**: PRUNE_KEEP_TURNS=10 剪枝、COMPRESS_THRESHOLD=0.45 压缩、ctx.json 持久化、raw.jsonl 审计日志
 **层级**: T1（真实 LLM）
 
 **步骤**:
@@ -289,7 +289,7 @@ DELETE /api/test/sessions
 
 ### E2E-10: Langfuse trace 全链路验证
 
-**覆盖**: L30（trace → root span → GENERATION 三层结构、span 栈 push/pop、sessionId 关联、source metadata）
+**覆盖**: trace → root span → GENERATION 三层结构、span 栈 push/pop、sessionId 关联、source metadata
 **层级**: T4（LLM + Langfuse）
 **前置**: Langfuse 可用
 
@@ -312,7 +312,7 @@ DELETE /api/test/sessions
 
 ### E2E-11: 5+2 事件完整性与结构化日志
 
-**覆盖**: L30（7 个事件全部触发、dispatch 容错、structured_log handler）
+**覆盖**: 7 个事件全部触发、dispatch 容错、structured_log handler
 **层级**: T4（LLM + Langfuse）
 
 **步骤**:
@@ -337,7 +337,7 @@ DELETE /api/test/sessions
 
 ### E2E-12: 循环检测与成本围栏
 
-**覆盖**: L31（LoopDetector MD5 状态哈希 threshold=3、CostGuard 实时计费 + 预算阈值、dispatch_gate 执行顺序、GuardrailDeny 传播）
+**覆盖**: LoopDetector MD5 状态哈希 threshold=3、CostGuard 实时计费 + 预算阈值、dispatch_gate 执行顺序、GuardrailDeny 传播
 **层级**: T5（LLM）
 
 **步骤**:
@@ -356,7 +356,7 @@ DELETE /api/test/sessions
 
 ### E2E-13: SandboxGuard 输入净化（多规则覆盖）
 
-**覆盖**: L32（SandboxGuard 5 类规则：路径遍历、危险命令、Shell 注入、URL 编码绕过、Prompt Injection）
+**覆盖**: SandboxGuard 5 类规则：路径遍历、危险命令、Shell 注入、URL 编码绕过、Prompt Injection
 **层级**: T6（LLM 或 No LLM）
 
 **步骤**:
@@ -376,7 +376,7 @@ DELETE /api/test/sessions
 
 ### E2E-14: 凭证安全与跨用户数据隔离
 
-**覆盖**: L32（SecureToolWrapper 凭证注入、环境变量隐藏）、L17（routing_key 隔离）、L32（三层安全）
+**覆盖**: SecureToolWrapper 凭证注入、环境变量隐藏、routing_key 隔离、三层安全
 **层级**: T6（真实 LLM）
 
 **步骤**:
@@ -396,7 +396,7 @@ DELETE /api/test/sessions
 
 ### E2E-15: 审计日志与 GuardrailDeny 传播链
 
-**覆盖**: L32（SecurityAuditLogger append-only JSONL、SESSION_END summary）、L31（pending_deny 延迟重抛、dispatch_gate 顺序）、L30（AFTER_TOOL_CALL denied metadata）
+**覆盖**: SecurityAuditLogger append-only JSONL、SESSION_END summary、pending_deny 延迟重抛、dispatch_gate 顺序、AFTER_TOOL_CALL denied metadata
 **层级**: T5 + T6
 
 **步骤**:
@@ -448,21 +448,21 @@ pytest tests/e2e/ -m "security" -v
 
 ### 测试统计
 
-| 编号 | 功能域 | 步骤数 | 覆盖课程 | 层级 |
-|------|--------|--------|---------|------|
-| 01 | 斜杠命令全流程 | 8 | L17 | T0 |
-| 02 | 路由隔离与并发 | 4 | L12, L17 | T0 |
-| 03 | 多轮对话 + 上下文生命周期 | 5 | L8, L9, L17-L19 | T1 |
-| 04 | Bootstrap 人设加载 | 3 | L18, L22 | T1 |
-| 05 | 搜索技能端到端 | 1 | L12-L13, L16-L17 | T2 |
-| 06 | 网页浏览 + 代码执行 | 2 | L14-L16 | T2 |
-| 07 | memory-save + 跨 session 持久化 | 4 | L18, L20, L22 | T2 |
-| 08 | search_memory + 降级 | 5 | L21-L22 | T3 |
-| 09 | 长对话剪枝压缩 | 16 | L19 | T1 |
-| 10 | Langfuse trace 全链路 | 3 | L30 | T4 |
-| 11 | 5+2 事件完整性 | 5 | L30 | T4 |
-| 12 | 循环检测 + 成本围栏 | 2 | L31 | T5 |
-| 13 | SandboxGuard 多规则 | 5 | L32 | T6 |
-| 14 | 凭证安全 + 跨用户隔离 | 5 | L17, L32 | T6 |
-| 15 | 审计日志 + GuardrailDeny 传播 | 5 | L30-L32 | T5+T6 |
-| **合计** | | **73 步** | **L8-L22, L30-L32** | |
+| 编号 | 功能域 | 步骤数 | 层级 |
+|------|--------|--------|------|
+| 01 | 斜杠命令全流程 | 8 | T0 |
+| 02 | 路由隔离与并发 | 4 | T0 |
+| 03 | 多轮对话 + 上下文生命周期 | 5 | T1 |
+| 04 | Bootstrap 人设加载 | 3 | T1 |
+| 05 | 搜索技能端到端 | 1 | T2 |
+| 06 | 网页浏览 + 代码执行 | 2 | T2 |
+| 07 | memory-save + 跨 session 持久化 | 4 | T2 |
+| 08 | search_memory + 降级 | 5 | T3 |
+| 09 | 长对话剪枝压缩 | 16 | T1 |
+| 10 | Langfuse trace 全链路 | 3 | T4 |
+| 11 | 5+2 事件完整性 | 5 | T4 |
+| 12 | 循环检测 + 成本围栏 | 2 | T5 |
+| 13 | SandboxGuard 多规则 | 5 | T6 |
+| 14 | 凭证安全 + 跨用户隔离 | 5 | T6 |
+| 15 | 审计日志 + GuardrailDeny 传播 | 5 | T5+T6 |
+| **合计** | | **73 步** | |

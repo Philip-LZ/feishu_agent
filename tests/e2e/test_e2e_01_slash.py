@@ -1,6 +1,6 @@
 """E2E-01: Slash command full flow.
 
-Covers: L17 (slash command intercept, session lifecycle, SessionManager)
+Covers: slash command intercept, session lifecycle, SessionManager
 Tier: T0 (No LLM, echo agent)
 """
 

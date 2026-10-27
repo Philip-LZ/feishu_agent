@@ -1,7 +1,7 @@
 """E2E-09: Long conversation pruning and compression.
 
-Covers: L19 (PRUNE_KEEP_TURNS=10 pruning, COMPRESS_THRESHOLD=0.45 compression,
-        ctx.json persistence, raw.jsonl audit log)
+Covers: PRUNE_KEEP_TURNS=10 pruning, COMPRESS_THRESHOLD=0.45 compression,
+        ctx.json persistence, raw.jsonl audit log
 Tier: T1 (real LLM)
 """
 
@@ -64,7 +64,7 @@ class TestPruningE2E:
             api_key=qwen_api_key,
         ), f"Summary quality check failed. Reply: {reply[:500]}"
 
-        # Verify ctx.json and raw.jsonl persistence (L19)
+        # Verify ctx.json and raw.jsonl persistence
         ctx_dir = dirs["ctx_dir"]
         session_id = r_summary["session_id"]
 

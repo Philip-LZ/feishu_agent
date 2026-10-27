@@ -102,7 +102,7 @@ allowed-tools:
     {"file": "/root/memory_stray.md", "reason": "记忆文件应在 /workspace/ 下"}
   ],
   "routing_mismatches": [
-    {"index_entry": "课程进度 → memory_cource.md", "actual_file": "memory_course.md", "reason": "拼写错误"}
+    {"index_entry": "项目进度 → memory_projet.md", "actual_file": "memory_project.md", "reason": "拼写错误"}
   ],
   "stale_files": [
     {"file": "memory_2023_project.md", "last_modified": "2023-11-01", "days_since": 480}
@@ -169,7 +169,7 @@ allowed-tools:
 ### ④ 路由错配——记录与查询不一致（<n> 条）
 | 索引条目 | 实际文件名 | 问题 |
 |---------|----------|------|
-| 课程进度 → memory_cource.md | memory_course.md | 拼写错误 |
+| 项目进度 → memory_projet.md | memory_project.md | 拼写错误 |
 
 ### ⑤ 过期文件（<n> 个）
 | 文件 | 最后更新 | 建议 |

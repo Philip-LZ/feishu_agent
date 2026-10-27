@@ -1,10 +1,5 @@
 """CrewAI 回调 → 5+2 事件体系的翻译层。
 
-【课程对应】
-- L30《项目实战 3》：建立 5+2 事件体系
-- L31《项目实战 3》：引入 pending_deny 模式
-- L33《项目实战 5》：Runner 在 cleanup 时调用 SESSION_END，触发 Langfuse flush
-
 【为什么需要这个 adapter】
 CrewAI 自带的 hook 体系（@before_tool_use 装饰器、step_callback、task_callback）
 不是为加固设计的，存在三个问题需要这一层抹平：
@@ -81,7 +76,7 @@ class CrewObservabilityAdapter:
         self._turn_count = 0
         self._current_turn_has_llm = False
         self._cleaned = False
-        # ★ pending_deny 是 L31 的核心机制：CrewAI 会吞掉 BEFORE_TOOL_CALL 的异常，
+        # pending_deny 用于延迟传播拒绝异常：CrewAI 会吞掉 BEFORE_TOOL_CALL 的异常，
         #   所以 deny 不能立即抛，得存起来等到 step_callback 这种安全出口再重抛
         self._pending_deny: GuardrailDeny | None = None
         self._last_agent_role = ""
@@ -165,7 +160,7 @@ class CrewObservabilityAdapter:
         1. 存入 _pending_deny，等 step_callback 重抛（让 CrewAI 知道该终止）
         2. 立即额外发一次 AFTER_TOOL_CALL（标记 guardrail_deny=True）——
            这是为了让 Langfuse trace 里有"被拦截的调用"的完整记录，
-           即使工具实际没执行（参见 L33 课文"约束一"）
+           即使工具实际没执行
         """
         input_dict = dict(tool_input or {})
         self._tool_start_times[(tool_name, self._turn_count)] = time.monotonic()
@@ -331,7 +326,7 @@ class CrewObservabilityAdapter:
 
         【作用】
         1. 触发 audit_logger 写本会话的安全摘要（events_by_type 等聚合统计）
-        2. 触发 langfuse_trace.flush_and_close —— ★ 课文"机制五"的强制 flush
+        2. 触发 langfuse_trace.flush_and_close —— 强制 flush
            必须在 sender.send(reply) 之前完成，保证用户看到回复时 Langfuse 数据已就绪
 
         【幂等保护】

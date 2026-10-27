@@ -46,4 +46,4 @@ Queue：控制单 key 积压
 Semaphore：控制 Sender 出站并发
 ```
 
-配套课程：[第二课](../lessons/0002-routing-queue-concurrency.md)。
+相关说明：[路由与并发](../lessons/0002-routing-queue-concurrency.md)。

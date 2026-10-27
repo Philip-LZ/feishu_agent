@@ -69,7 +69,7 @@ IN SCOPE：
   - 飞书 WebSocket 入站事件处理
   - TestAPI 调用路径
   - Agent 推理 → Skill 执行 → Sandbox MCP 调用链
-  - 三层记忆读写路径（L19/L20/L21）
+  - 三层记忆读写路径（）
   - /metrics、/health 端点
   - pgvector 查询
   - workspace 文件系统操作
@@ -195,7 +195,7 @@ def _filter_mcp_tools(
 ) -> list[BaseTool]:
     """
     仅保留 SKILL.md frontmatter allowed_tools 声明的 MCP tool。
-    生产模式下（enable_mcp_whitelist=True）强制过滤；教学模式可关。
+    生产模式下（enable_mcp_whitelist=True）强制过滤；开发模式可关。
     """
     if not allowed_names:
         # allowed_tools 未声明 → 拒绝所有 task-type tool（最小权限）
@@ -1899,7 +1899,7 @@ def _filter_mcp_tools(
     1. allowed_names 为空列表 → 返回空列表（最小权限）
     2. allowed_names 包含非法字符 → 记录 warning，跳过该条目
     3. allowed_names 中声明了不存在的 tool → warning，不报错
-    4. enable_mcp_whitelist=False（教学模式）→ 调用者不调用此函数，直接返回 all_tools
+    4. enable_mcp_whitelist=False（开发模式）→ 调用者不调用此函数，直接返回 all_tools
 
     Args:
         all_tools:     AIO-Sandbox MCP server 暴露的全量 tool 列表
@@ -1964,7 +1964,7 @@ def build_skill_crew_with_whitelist(
     返回 (tools_to_use, whitelist_active)。
     """
     if not flags.enable_mcp_whitelist:
-        # 教学模式：全部 tool 开放
+        # 开发模式：全部 tool 开放
         logger.debug("skill_loader.whitelist_disabled", skill=skill.name)
         return list(all_mcp_tools), False
 

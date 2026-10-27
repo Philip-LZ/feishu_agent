@@ -28,7 +28,7 @@ Scope: when an AI-agent system should redact telemetry, what useful metadata can
   Source: [NIST SP 800-92](https://csrc.nist.gov/pubs/sp/800/92/final) and [PDF](https://nvlpubs.nist.gov/nistpubs/legacy/SP/nistspecialpublication800-92.Pdf).
   Teaching use: teach redaction as part of the whole lifecycle: prevent capture, protect transport/storage, audit access, and dispose on schedule—not merely mask a dashboard view.
 
-## Minimal policy to derive for an AI-agent lesson
+## Minimal policy to derive for an AI agent
 
 `allowlisted event metadata → producer-side redaction → export-time defense-in-depth scrub → encrypted, least-privilege, tamper-resistant storage → policy-based retention/disposal`
 

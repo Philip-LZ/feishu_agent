@@ -1,7 +1,7 @@
 """E2E-03: Multi-turn conversation and context lifecycle.
 
-Covers: L8 (Task expected_output), L9 (TaskOutput context), L17 (/new),
-        L18 (context governance), L19 (session persistence + reset)
+Covers: Task expected_output, TaskOutput context, /new,
+        context governance, session persistence + reset
 Tier: T1 (real LLM)
 """
 

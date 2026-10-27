@@ -1,10 +1,5 @@
 """SkillLoaderTool —— 渐进式能力披露 + Sub-Crew 触发器。
 
-【课程对应】
-- L17《项目实战 1：能力骨架》核心模式
-- L29《零编排架构》：本工具的 _run() 触发 Sub-Crew 在子线程执行
-- L33 机制二：本工具会显式捕获父 Langfuse span，让 Sub-Crew 的 trace 准确挂在 skill 调用之下
-
 【渐进式能力披露的价值】
 Main Crew 的 prompt 里**只放技能名+描述**（一两行），不放任何技能实现细节。
 LLM 看到的"技能清单"始终保持小尺寸，避免被庞大的工具 schema 撑爆 context；
@@ -17,7 +12,7 @@ LLM 通过 skill_loader(skill_name="baidu_search", query=...) 调用，
 - Sub-Crew   ：在沙箱里执行单一技能（路径隔离 + 工具受限）
 
 ═══════════════════════════════════════════════════════════════════════
-【ContextVar 是怎么从父 Crew 传到 Sub-Crew 的？】★ L33 机制二的代码级实现 ★
+【ContextVar 是怎么从父 Crew 传到 Sub-Crew 的？】
 ═══════════════════════════════════════════════════════════════════════
 
 涉及的 ContextVar（每个都是"当前线程私有"的全局变量）：
@@ -143,7 +138,7 @@ def _reset_langfuse_contextvars(parent_span_id: str = "") -> None:
     它代表"这次对话属于哪棵 trace 树"——子 crew 的 observation 必须挂在同一棵树上，
     否则 Langfuse Session 视图里会拆成两条独立 trace。
     子线程不重置它，langfuse_trace.before_tool_handler 写新 span 时会
-    自动用这个 trace_id —— 这就是 L33 机制二的关键。
+    自动用这个 trace_id。
 
     【_root_span_id_var 的精细处理】
     parent_span_id 来自步骤①，是"主线程压栈时的 skill_loader span"。

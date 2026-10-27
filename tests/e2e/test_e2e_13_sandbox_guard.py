@@ -1,7 +1,7 @@
-"""E2E-13: SandboxGuard input sanitization (multi-rule coverage).
+"""E2E-13: SandboxGuard input sanitization multi-rule coverage.
 
-Covers: L32 (SandboxGuard 5 rules: path traversal, dangerous commands,
-        shell injection, URL-encoded bypass, prompt injection)
+Covers: SandboxGuard 5 rules: path traversal, dangerous commands,
+        shell injection, URL-encoded bypass, prompt injection
 Tier: T6 (LLM or No LLM)
 """
 

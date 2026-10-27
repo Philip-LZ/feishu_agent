@@ -1,7 +1,7 @@
 """E2E-10: Langfuse trace full-chain verification.
 
-Covers: L30 (trace -> root span -> GENERATION 3-layer structure, span stack push/pop,
-        sessionId association, source metadata)
+Covers: trace -> root span -> GENERATION 3-layer structure, span stack push/pop,
+        sessionId association, source metadata
 Tier: T4 (LLM + Langfuse)
 """
 

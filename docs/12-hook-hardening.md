@@ -1,9 +1,8 @@
-# 12. Hook 框架加固——可观测性 + 可靠性 + 安全（模块五集成）
+# 12. Hook 框架加固——可观测性 + 可靠性 + 安全
 
 - **版本**：v3.1-rc1（2026-04-24，含 4 路 Review + E2E 反向验证修订）
 - **前置版本**：DESIGN.md v2.1（2026-04-19）
-- **课程对应**：第 30 课（可观测性）、第 31 课（可靠性）、第 32 课（安全）→ **第 33 课整合到 XiaoPaw**
-- **设计原则**：保留 v2 全部教学意图和已有加固，在此基础上叠加 Hook 框架的三层运行时保护
+- **设计原则**：保留 v2 全部功能和已有加固，在此基础上叠加 Hook 框架的三层运行时保护
 
 ---
 
@@ -11,9 +10,9 @@
 
 1. [概述与动机](#1-概述与动机)
 2. [Hook 框架架构](#2-hook-框架架构)
-3. [可观测性升级（30 课）](#3-可观测性升级30-课)
-4. [可靠性策略（31 课）](#4-可靠性策略31-课)
-5. [安全策略（32 课）](#5-安全策略32-课)
+3. [可观测性升级](#3-可观测性升级)
+4. [可靠性策略](#4-可靠性策略)
+5. [安全策略](#5-安全策略)
 6. [与 v2 现有模块的集成](#6-与-v2-现有模块的集成)
 7. [目录结构变更](#7-目录结构变更)
 8. [新增 Feature Flags](#8-新增-feature-flags)
@@ -41,7 +40,7 @@ XiaoPaw v2 在基础设施层做了大量加固（并发锁、凭证校验、容
 
 **一个骨架，三层插件。**
 
-30 课搭建的 Hook 框架（HookRegistry + HookLoader + CrewObservabilityAdapter）是统一骨架。31 课的可靠性策略、32 课的安全策略、以及现有的观测 handler，全部作为插件注册在同一个骨架上。改 Hook 不改代码，改 YAML 就行。
+Hook 框架（HookRegistry + HookLoader + CrewObservabilityAdapter）是统一骨架。可靠性策略、安全策略、以及现有的观测 handler，全部作为插件注册在同一个骨架上。改 Hook 不改代码，改 YAML 就行。
 
 ```
 v2 已有层                    v3 新增层
@@ -250,7 +249,7 @@ strategies:
 
 ---
 
-## 3. 可观测性升级（30 课）
+## 3. 可观测性升级
 
 ### 3.1 v2 → v3 可观测性对比
 
@@ -293,7 +292,7 @@ LANGFUSE_ENABLED=true           # feature flag，见 §8
 
 ---
 
-## 4. 可靠性策略（31 课）
+## 4. 可靠性策略
 
 ### 4.1 RetryTracker（纯观测）
 
@@ -394,7 +393,7 @@ BEFORE_TOOL_CALL 执行链（v3 完整）：
 
 ---
 
-## 5. 安全策略（32 课）
+## 5. 安全策略
 
 ### 5.1 SandboxGuard：确定性输入消毒
 
@@ -704,7 +703,7 @@ ctx = HookContext(
 | `test_guardrail_deny_flow.py` | Deny 传播 + pending_deny 流转 | 3 | 集成 |
 | `test_trace_quality.py` | Langfuse trace 质量验证 | 6 | 集成 |
 | `test_deny_observability.py` | Deny 事件可观测性 | 6 | 集成 |
-| E2E 测试（15 场景 + 2 persona） | 覆盖 L8-L22 + L30-L32 课程知识点 | 65 | E2E |
+| E2E 测试（15 场景 + 2 persona） | 覆盖会话、技能、记忆、观测、可靠性与安全功能 | 65 | E2E |
 
 **实际用例合计**：293 个（单元 188 + 集成 40 + E2E 65）。
 
@@ -797,7 +796,7 @@ DESIGN.md（总纲）
 
 > **Review 日期**：2026-04-24
 > **Review 角色**：Architecture Agent / Security Agent / Code-Review Agent / TDD Agent
-> **输入**：本文档 v3.0-draft + v2 DESIGN.md + m5l30-32 参考实现 + v1 xiaopaw-with-memory 实际代码
+> **输入**：本文档 v3.0-draft + v2 DESIGN.md + Hook 参考实现 + v1 xiaopaw-with-memory 实际代码
 
 ### 12.1 CRITICAL 问题（必须在实现前解决）
 
@@ -927,7 +926,7 @@ SandboxGuard 和 PermissionGate 注册时 `fail_closed=True`，CostGuard 和 Ret
 
 **问题**（Architecture Agent）：CostGuard 使用 `max(1, len(text) * 2 // 3)` 粗估 token，而 v2 已有三级 tokenizer（Qwen 官方 > HuggingFace > rough）。
 
-**设计修订**：CostGuard 接受可选的 `token_counter` 依赖注入。在 XiaoPaw 中，通过 `deps` 机制注入 v2 的 `count_tokens()` 函数。在独立演示（m5l31）中降级使用粗估。
+**设计修订**：CostGuard 接受可选的 `token_counter` 依赖注入。在 XiaoPaw 中，通过 `deps` 机制注入 v2 的 `count_tokens()` 函数。在独立演示中降级使用粗估。
 
 ### 12.3 MEDIUM 问题（实现时注意）
 
@@ -938,7 +937,7 @@ SandboxGuard 和 PermissionGate 注册时 `fail_closed=True`，CostGuard 和 Ret
 | M3 | SSOT 文档 `hook-events.md` / `strategies.md` 未创建 | Architect | 实现阶段同步创建。 |
 | M4 | 审计日志无加密链 | Security | 当前单节点部署风险可控。v3.1 考虑 HMAC 链。 |
 | M5 | F13 总开关关闭后所有保护失效 | Security | `assert_all_production_safe()` 已强制 F13=true。运行时 SIGHUP reload 不允许修改 F13。 |
-| M6 | Strategy loader YAML `strategies:` 段在参考实现中不存在 | Code-Review | 需从零实现。已在 m5l31/m5l32 的 loader.py 中有部分逻辑，需整合。 |
+| M6 | Strategy loader YAML `strategies:` 段在参考实现中不存在 | Code-Review | 需从零实现。已在 可靠性与安全策略参考实现的 loader.py 中有部分逻辑，需整合。 |
 | M7 | `step_callback` 组合（adapter + verbose 模式）| Code-Review | 创建 `compose_callbacks(*fns)` 工具函数，串联多个 callback。 |
 | M8 | `pending_deny` 通过 `akickoff` 的传播路径未验证 | Code-Review | 需在 TDD 阶段实测 CrewAI `akickoff` 的异常传播行为。标记为 P0 集成测试。 |
 
@@ -948,7 +947,7 @@ SandboxGuard 和 PermissionGate 注册时 `fail_closed=True`，CostGuard 和 Ret
 
 | # | 隐患 | 影响 | 处置 |
 |---|------|------|------|
-| TD-1 | m5l32 参考实现中 `@before_tool_call` 使用 `dispatch` 而非 `dispatch_gate` | 安全策略（SandboxGuard/PermissionGate）的 deny 被吞掉 | **必须修正**：XiaoPaw 实现中使用 `dispatch_gate` |
+| TD-1 | 安全策略参考实现中 `@before_tool_call` 使用 `dispatch` 而非 `dispatch_gate` | 安全策略（SandboxGuard/PermissionGate）的 deny 被吞掉 | **必须修正**：XiaoPaw 实现中使用 `dispatch_gate` |
 | TD-2 | AFTER_TURN 事件缺少 token 信息（adapter 中未填充 `input_tokens`/`output_tokens`）| CostGuard 在 `after_turn_handler` 中无法累加 token | **必须修正**：adapter 从 CrewAI `step_callback` 参数中提取 token 信息 |
 | TD-3 | HookContext `frozen=True` 但 `tool_input: dict` 内部可变 | handler 可修改 `ctx.tool_input['key'] = 'value'` 影响后续 handler | 记录为已知限制；Python frozen dataclass 不深冻结可变字段 |
 | TD-4 | LoopDetector MD5 哈希碰撞概率 | 16 字符 hex = 64 位，短 session 内碰撞概率极低 | 接受现状，记录为设计约束 |

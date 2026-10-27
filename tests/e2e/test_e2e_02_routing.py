@@ -1,7 +1,7 @@
 """E2E-02: Routing isolation and concurrency safety.
 
-Covers: L17 (per-routing_key serial queue, workspace isolation),
-        L12 (contextvars isolation)
+Covers: per-routing_key serial queue, workspace isolation,
+        contextvars isolation
 Tier: T0 (No LLM)
 """
 

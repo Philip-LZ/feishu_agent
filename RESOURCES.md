@@ -23,9 +23,9 @@
 - [Python asyncio queues](https://docs.python.org/3/library/asyncio-queue.html)
   有界异步队列的官方语义。用于：解释 Runner 的保序和背压。
 - [Primary-source request-path findings](research/ai-agent-request-path-sources.md)
-  上列外部资料与 XiaoPaw 第一课的对应结论；用于课后核对。
+  上列外部资料与 XiaoPaw 请求链路的对应结论；用于核对实现。
 - [Security-log redaction primary sources](research/security-log-redaction-sources.md)
-  OWASP、OpenTelemetry、Langfuse 与 NIST 对敏感数据最小化、出口前脱敏、访问和保留策略的权威指引。用于第二课与安全面试。
+  OWASP、OpenTelemetry、Langfuse 与 NIST 对敏感数据最小化、出口前脱敏、访问和保留策略的权威指引。用于并发与安全分析。
 
 ## Wisdom (Communities)
 

@@ -237,15 +237,15 @@ graph TD
 **机械校验脚本**（Batch 5 跑）：
 ```bash
 # cross-ref 链接
-grep -rE '\]\(\.?\./' /root/course/code/xiaopaw-v2/docs/ | \
+grep -rE '\]\(\.?\./' docs/ | \
   python3 -c "import sys; [print(l) for l in sys.stdin if 'broken' in l.lower()]"
 
 # 残留旧字段
-grep -rn "raw_response" /root/course/code/xiaopaw-v2/docs/ && echo "⚠️ raw_response 残留"
-grep -rn "encrypt_key" /root/course/code/xiaopaw-v2/docs/ | grep -v "历史" && echo "⚠️ encrypt_key 残留"
+grep -rn "raw_response" docs/ && echo "⚠️ raw_response 残留"
+grep -rn "encrypt_key" docs/ | grep -v "历史" && echo "⚠️ encrypt_key 残留"
 
 # 版本号
-grep -L "Version: v2.1\|v2.0-draft" /root/course/code/xiaopaw-v2/docs/*.md
+grep -L "Version: v2.1\|v2.0-draft" docs/*.md
 ```
 
 ---

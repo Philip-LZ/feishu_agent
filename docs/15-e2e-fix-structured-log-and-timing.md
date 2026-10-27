@@ -39,13 +39,13 @@ E2E 全量结构化日志 Review 覆盖 8 个 session、625 个事件，发现�
 
 ### 2.1 问题分析
 
-第 30 课定义了 5+2 事件体系，`hooks.yaml` 也注册了全部 7 个事件的 Langfuse handler。但 `structured_log.py` 只实现了 `before_turn`、`before_llm`、`before_tool_call`、`after_tool_call` 四个 handler，遗漏了：
+Hook 框架定义了 5+2 事件体系，`hooks.yaml` 也注册了全部 7 个事件的 Langfuse handler。但 `structured_log.py` 只实现了 `before_turn`、`before_llm`、`before_tool_call`、`after_tool_call` 四个 handler，遗漏了：
 
 - `AFTER_TURN`——无法从日志确认 turn 是否正常结束
 - `TASK_COMPLETE`——无法从日志确认 Task 输出
 - `SESSION_END`——无法从日志确认 session 是否正常关闭
 
-这违反了第 30 课的核心教学点：**结构化日志是 Langfuse 的降级方案，两者应覆盖相同事件集**。
+这违反了观测层的设计原则：**结构化日志是 Langfuse 的降级方案，两者应覆盖相同事件集**。
 
 ### 2.2 修改方案
 
@@ -86,7 +86,7 @@ def session_end_handler(ctx) -> None:
 
 - **不改 `_emit()` 签名**：保持一行 JSON 到 stderr，不引入新的日志 sink
 - **不改 `HookContext`**：所有字段已在 `registry.py` 定义，handler 只做读取
-- **field 选择原则**：每个 handler 只输出该事件类型语义上有意义的字段，不冗余。`after_turn` 的 `duration_ms` / `input_tokens` / `output_tokens` 对应第 30 课讲的 per-turn 可观测性指标
+- **field 选择原则**：每个 handler 只输出该事件类型语义上有意义的字段，不冗余。`after_turn` 的 `duration_ms` / `input_tokens` / `output_tokens` 对应 per-turn 可观测性指标
 
 ---
 
@@ -96,7 +96,7 @@ def session_end_handler(ctx) -> None:
 
 `HookContext.duration_ms` 字段在 `registry.py` 定义（默认 `0`），`structured_log.after_tool_handler` 和 `langfuse_trace.after_tool_handler` 都读取并记录它。但 `CrewObservabilityAdapter` 在 `on_before_tool_call()` 和 `on_after_tool_call()` 之间没有任何计时逻辑，导致所有工具调用的耗时记录为 0。
 
-这违反了第 30 课的教学点：**AFTER_TOOL_CALL 事件应携带 duration_ms，用于工具性能分析和异常检测**。
+这违反了观测层的设计原则：**AFTER_TOOL_CALL 事件应携带 duration_ms，用于工具性能分析和异常检测**。
 
 ### 3.2 修改方案
 
@@ -306,7 +306,7 @@ E2E-11 单独运行 178s 通过，全套件中因前置测试（E2E-07 43s + E2E
    @pytest.mark.timeout(900)
    ```
 
-**项目侧的可选改进**：在 `build_agent_fn` 中传入 `max_iter` 参数限制 Agent 最大推理轮次。但这属于可靠性策略层（第 31 课 LoopDetector 的职责），不在本次修复范围。
+**项目侧的可选改进**：在 `build_agent_fn` 中传入 `max_iter` 参数限制 Agent 最大推理轮次。但这属于可靠性策略层（LoopDetector 的职责），不在本次修复范围。
 
 ---
 
@@ -399,17 +399,17 @@ assert expected.issubset(event_types), f"Missing events: {expected - event_types
 | 新增代码是否可被 workspace 层 hook 覆盖？ | ✅ structured_log 在 global layer，workspace 可叠加 |
 | 新增字段是否 backward compatible？ | ✅ `is_virtual` 和 `duration_ms` 不破坏现有日志消费方 |
 
-### 9.3 课程一致性
+### 9.3 设计一致性
 
-| 课程知识点 | 一致性 |
+| 功能点 | 一致性 |
 |-----------|--------|
-| 第 30 课：5+2 事件体系 | ✅ FIX-1 补全后 structured_log 覆盖全部 7 个事件 |
-| 第 30 课：结构化日志是 Langfuse 降级方案 | ✅ FIX-1 让两者覆盖相同事件集 |
-| 第 30 课：span 栈 push/pop | ✅ FIX-2 的 (tool_name, turn) key 与 span stack 索引一致 |
-| 第 31 课：dispatch_gate 可阻断 | ✅ FIX-2 deny 路径不影响 dispatch_gate 语义 |
-| 第 31 课：pending_deny 传播 | ✅ FIX-2 在 deny 分支清理 start_times |
-| 第 32 课：三层安全 | ✅ 不触碰安全策略层，仅修复观测层 |
-| 第 32 课：SecurityAuditLogger | ✅ 不影响审计日志（独立 handler） |
+| 5+2 事件体系 | ✅ FIX-1 补全后 structured_log 覆盖全部 7 个事件 |
+| 结构化日志是 Langfuse 降级方案 | ✅ FIX-1 让两者覆盖相同事件集 |
+| span 栈 push/pop | ✅ FIX-2 的 (tool_name, turn) key 与 span stack 索引一致 |
+| dispatch_gate 可阻断 | ✅ FIX-2 deny 路径不影响 dispatch_gate 语义 |
+| pending_deny 传播 | ✅ FIX-2 在 deny 分支清理 start_times |
+| 三层安全 | ✅ 不触碰安全策略层，仅修复观测层 |
+| SecurityAuditLogger | ✅ 不影响审计日志（独立 handler） |
 
 ### 9.4 框架整体性
 

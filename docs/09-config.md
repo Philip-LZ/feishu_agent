@@ -249,7 +249,7 @@ feature_flags:
   # 观测（F6）
   enable_trace_id: true
   # 安全（F7-F10）
-  enable_mcp_whitelist: true                    # 教学 demo 可改 false
+  enable_mcp_whitelist: true                    # 本地 demo 可改 false
   enable_memory_save_filter: true
   enable_webhook_replay_cache: true             # v2.1：原 enable_webhook_signature 改名
                                                  # 原字段 SDK 不存在（sdk-verification-report.md 已证实）
@@ -448,15 +448,15 @@ class FeatureFlags:
 
 ### 4.2 Flag ↔ 缺陷编号映射
 
-每个 flag 都对应 [v1 Review 报告](../../../multi-agent/review_L22/01_Review报告_xiaopaw-with-memory.md) 里的一个缺陷编号：
+每个 flag 都对应 [设计总纲](../DESIGN.md) 里的一个缺陷编号：
 
-| Flag (SSOT 编号) | 对应缺陷 / 威胁 | 默认值 | 教学 demo 推荐值 |
+| Flag (SSOT 编号) | 对应缺陷 / 威胁 | 默认值 | 本地 demo 推荐值 |
 |---|---|---|---|
 | F2 `enable_skill_timeout` | H2 Sub-Crew 卡死 | true | true |
 | F3 `enable_cron_filelock` | H8 Cron 跨进程 | true | true（单节点也需要） |
 | F4 `enable_memory_save_filelock` | H9 并发覆盖 | true | true |
 | F5 `enable_feishu_rate_limit_aware` | H6 429 识别 | true | true |
-| F7 `enable_mcp_whitelist` | T1 Prompt Injection | true | **false**（教学 demo 需全 MCP） |
+| F7 `enable_mcp_whitelist` | T1 Prompt Injection | true | **false**（本地 demo 需全 MCP） |
 | F8 `enable_memory_save_filter` | T2 Memory Poisoning + T8 Cron 注入 | true | true |
 | F9 `enable_webhook_replay_cache` | T3 WS 重放（SDK 不做 dedup） | true | true |
 | F10 `enable_inbound_rate_limit` | T7 DoS | true | false（本地测试方便） |
@@ -710,7 +710,7 @@ feishu:
   allowed_chats: ["oc_dev_chat_id_xxx"]
 
 feature_flags:
-  enable_mcp_whitelist: false            # 教学 demo 探索 sandbox 全部工具
+  enable_mcp_whitelist: false            # 本地 demo 探索 sandbox 全部工具
   enable_inbound_rate_limit: false       # 本地测试不限流
   token_counter_mode: "rough"            # 无网环境兼容（F1: qwen_official/hf_qwen/rough）
 

@@ -1,7 +1,7 @@
 """E2E-14: Credential security + cross-user data isolation.
 
-Covers: L32 (SecureToolWrapper credential injection, env var hiding),
-        L17 (routing_key isolation), L32 (3-layer security)
+Covers: SecureToolWrapper credential injection, env var hiding,
+        routing_key isolation, 3-layer security
 Tier: T6 (real LLM)
 """
 

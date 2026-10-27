@@ -128,7 +128,7 @@ class Runner:
             # Get or create session
             session = await self._session_mgr.get_or_create(key)
 
-            # ★ L33 接线点 1：为本次请求创建 Hook adapter（每请求一个，session_id 绑定）
+            # 为本次请求创建 Hook adapter（每请求一个，session_id 绑定）
             # adapter 在本函数内通过 ContextVar 传递给 main_crew、skill_loader、sub-crew
             if self._hook_registry:
                 adapter = CrewObservabilityAdapter(
@@ -149,7 +149,7 @@ class Runner:
             # Send thinking indicator, save card_msg_id for later update
             card_msg_id = await self._sender.send_thinking(key)
 
-            # ★ L33 接线点 2：pre-flight 安全检查
+            # pre-flight 安全检查
             # 把整个 Agent 执行包成一个虚拟工具调用 "agent_execution"，
             # 让 sandbox_guard / permission_gate 对用户原始输入提前过一遍 ——
             # 否则恶意 prompt 要等到 LLM 决定调真实工具时才会被拦截，浪费 LLM 算力。
@@ -236,7 +236,7 @@ class Runner:
                 )
 
         except GuardrailDeny as deny:
-            # ★ L33 接线点 3：兜底捕获 GuardrailDeny —— 友好告知用户而不是 500 错误
+            # 兜底捕获 GuardrailDeny —— 友好告知用户而不是 500 错误
             # GuardrailDeny 的来源有三处：
             #   1. pre-flight 检查（上面的 raise pending）
             #   2. main_crew 内部 step_callback / task_callback 重抛
@@ -281,7 +281,7 @@ class Runner:
             except Exception:
                 pass
         finally:
-            # ★ L33 接线点 4：finally 触发 SESSION_END
+            # finally 触发 SESSION_END
             # adapter.cleanup() 内部 dispatch SESSION_END → 触发：
             #   - audit_logger.session_end_handler（写本会话安全摘要）
             #   - langfuse_trace.flush_and_close（强制 flush，机制五）

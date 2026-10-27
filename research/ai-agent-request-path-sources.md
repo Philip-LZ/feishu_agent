@@ -1,6 +1,6 @@
 # AI-agent request path: primary sources
 
-Scope: the first XiaoPaw request-path lesson—queueing a request, entering a Crew, invoking tools/MCP, and observing lifecycle callbacks.
+Scope: the XiaoPaw request path—queueing a request, entering a Crew, invoking tools/MCP, and observing lifecycle callbacks.
 
 ## Findings
 

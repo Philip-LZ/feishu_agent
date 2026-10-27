@@ -1,9 +1,5 @@
 """CostGuard —— 实时 token 成本追踪 + 预算硬停。
 
-【课程对应】
-- L31《项目实战 3：dispatch_gate + 三策略》
-- L33 课文"约束三"：cost_guard 必须先于 loop_detector 在 AFTER_TURN 执行
-
 【双事件挂载】
 1. AFTER_TURN：每轮结束累计 token（"算账"）→ 超预算抛 deny
 2. BEFORE_TOOL_CALL：调用工具前再查一次预算（防止下一轮 LLM 还没触发就先调工具消费）
@@ -12,7 +8,6 @@
 循环场景是高消耗场景（Agent 重复调用工具最烧钱），偏偏是最需要准确计费的情况。
 如果 loop_detector 先触发 deny，cost_guard 永远算不到这一轮的账，
 预算严重偏低 —— 1 美元预算可能实际花了 3 美元。
-（参见 L33 课文"约束三"）
 """
 
 import os

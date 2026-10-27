@@ -1,7 +1,7 @@
 """E2E-06: Web browsing + code execution skills.
 
-Covers: L14 (MCP protocol, MCPServerHTTP), L15 (headless browser, code interpreter,
-        sandbox isolation), L16 (task-type skill)
+Covers: MCP protocol, MCPServerHTTP, headless browser, code interpreter,
+        sandbox isolation, task-type skill
 Tier: T2 (LLM + Sandbox)
 """
 

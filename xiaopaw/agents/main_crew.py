@@ -79,7 +79,7 @@ def _make_step_callback(
 ) -> Callable[[Any], None]:
     """生成 CrewAI step_callback —— 每个推理 step 后触发。
 
-    【L33 接线点：pending_deny 的安全出口】
+    【pending_deny 的安全出口】
     BEFORE_TOOL_CALL 抛的 GuardrailDeny 会被 CrewAI 吞掉（视为工具失败重试），
     所以 adapter 把 deny 存入 _pending_deny 字段。本回调是它的"重抛出口"——
     在 step 结束时把 deny 抛出，CrewAI 才会真正终止执行。
@@ -199,10 +199,9 @@ class MemoryAwareCrew:
 
     @crew
     def crew(self) -> Crew:
-        # ★ L33 接线点：把 adapter 的两个 callback 装进 CrewAI Crew
+        # 把 adapter 的两个 callback 装进 CrewAI Crew
         # step_callback：每个推理 step 触发 → AFTER_TURN + pending_deny 重抛
         # task_callback：Task 完成时触发 → TASK_COMPLETE + pending_deny 重抛（最后一道防线）
-        # 这是 33 课课文里"+2 处接线"的具体落点。
         adapter = get_current_adapter()
         return Crew(
             agents=self.agents,

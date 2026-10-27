@@ -1,9 +1,4 @@
-"""Sub-Crew —— Skill 在沙箱中的执行单元（L29 零编排协作）。
-
-【课程对应】
-- L17：SkillLoaderTool 渐进式能力披露（Main Crew 不知道 Skill 实现细节）
-- L29《零编排架构》：Sub-Crew 在 ThreadPoolExecutor 子线程里运行
-- L33《项目实战 5》机制二：sub-crew trace 自动挂父节点 —— 关键就在这里
+"""Sub-Crew —— Skill 在沙箱中的执行单元（零编排协作）。
 
 【为什么是"零编排"】
 传统 Agent 框架要求显式声明 Workflow（A → B → C）。

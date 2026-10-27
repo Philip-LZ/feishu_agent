@@ -129,19 +129,19 @@ routing_key: p2p:ou_search
 
 ### 🔍 Langfuse Trace 质量
 - **source 标识**: `xiaopaw-v2`（正确）
-- **span 生命周期**: 部分 span 通过 `auto-closed-by-next-llm` 和 `auto-closed-by-after-turn` 机制自动关闭，符合设计（第30课 Hook 机制）
+- **span 生命周期**: 部分 span 通过 `auto-closed-by-next-llm` 和 `auto-closed-by-after-turn` 机制自动关闭，符合设计（Hook 机制）
 - **完成 span**: `task-complete` 和 `session_end` 正确触发
 - **Parent 层级**: root span → tool span → generation span 层级清晰
 
-## 6. 与课程内容的对应
+## 6. 功能验证范围
 
-| 课程 | 覆盖内容 | E2E-05 验证点 |
+| 功能 | 覆盖内容 | E2E-05 验证点 |
 |------|---------|---------------|
-| L12 Function Calling | Agent 通过 LLM 决策调用工具 | ✅ llm-call-1 → skill_loader |
-| L13 BaseTool args_schema | SkillLoaderTool 参数定义 | ✅ skill_name + task_context |
-| L16 SkillLoaderTool | Progressive disclosure → Sub-Crew | ✅ 加载 SKILL.md → 创建 Sub-Crew |
-| L17 两层架构 | Main → Sub 双 Crew 协作 | ✅ Main Crew → Sub-Crew → 结果回传 |
-| L30 Hook 事件体系 | 5+2 事件 → Langfuse trace | ✅ 21 个 observation 完整记录 |
+| Function Calling | Agent 通过 LLM 决策调用工具 | ✅ llm-call-1 → skill_loader |
+| BaseTool args_schema | SkillLoaderTool 参数定义 | ✅ skill_name + task_context |
+| SkillLoaderTool | Progressive disclosure → Sub-Crew | ✅ 加载 SKILL.md → 创建 Sub-Crew |
+| 两层架构 | Main → Sub 双 Crew 协作 | ✅ Main Crew → Sub-Crew → 结果回传 |
+| Hook 事件体系 | 5+2 事件 → Langfuse trace | ✅ 21 个 observation 完整记录 |
 
 ## 7. 结论
 

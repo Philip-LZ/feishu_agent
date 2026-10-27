@@ -405,8 +405,8 @@ v2 保留 v1 的 Loading UI 模式：
 |---|---|---|
 | 主 Agent 对话 | `ZHIPU/GLM-5.3-Flash` | `MemoryAwareCrew.run_and_index` |
 | Sub-Crew | `ZHIPU/GLM-5.3-Flash` | `build_skill_crew` |
-| 压缩摘要（L19） | `qwen3-turbo` | `context_mgmt._summarize_chunk` |
-| 记忆摘要（L21） | `ZHIPU/GLM-5.3-Flash` | `indexer.extract_summary_and_tags` |
+| 压缩摘要（） | `qwen3-turbo` | `context_mgmt._summarize_chunk` |
+| 记忆摘要（） | `ZHIPU/GLM-5.3-Flash` | `indexer.extract_summary_and_tags` |
 | Embedding | `text-embedding-v3` dim=1024 | `indexer.embed_texts`, `search_memory.embed_query` |
 
 ### 5.2 适配层：AliyunLLM
@@ -533,7 +533,7 @@ MEMORY_DB_DSN=postgresql://xiaopaw_app:xxx@pgvector:5432/xiaopaw_memory?sslmode=
 选 psycopg2 而非 psycopg3 / asyncpg 的原因（见 [sdk-verification-report.md §5](sdk-verification-report.md)）：
 - 本机已装 `psycopg2-binary==2.9.11`；psycopg3（`psycopg[pool]`）未安装
 - `async_index_turn` 已通过 `run_in_executor` / `asyncio.to_thread` 走线程池
-- 教学 demo 依赖 pgvector 的 psycopg2 参数绑定方式（`pgvector.psycopg2.register_vector`）
+- 本地 demo 依赖 pgvector 的 psycopg2 参数绑定方式（`pgvector.psycopg2.register_vector`）
 - 无显著性能差异（qps 远低于 DB 瓶颈）
 
 > **不要用 `psycopg_pool`**：它属于 psycopg3 生态，与 psycopg2 连接对象不兼容。
@@ -625,7 +625,7 @@ params = StdioServerParameters(
 if flags.enable_mcp_whitelist and allowed_tools:
     tools = [t for t in all_tools if t.name in allowed_tools]
 else:
-    tools = all_tools  # 教学模式
+    tools = all_tools  # 开发模式
 ```
 
 详见 [07-security.md §7](07-security.md) 和 [02-modules.md §3.3](02-modules.md)。

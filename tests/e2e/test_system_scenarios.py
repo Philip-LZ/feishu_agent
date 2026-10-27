@@ -1,6 +1,6 @@
-"""课程演示 E2E 测试 — 第33课专用
+"""系统核心场景 E2E 测试
 
-验证课程正文里展示的三个核心场景：
+验证三个核心场景：
   DEMO-01  正常对话 → Langfuse 三层 trace 结构（trace / generation / span）
   DEMO-02  路径穿越攻击 → "安全策略拦截" + Langfuse guardrail_deny 标记
   DEMO-03  Prompt 注入攻击 → "安全策略拦截"，不泄露敏感信息
@@ -33,8 +33,8 @@ _RK_ATTACK = "p2p:ou_demo_attack"
 _RK_RECOVER = "p2p:ou_demo_recover"
 
 
-class TestCourseDemo:
-    """课程演示场景：正文里展示的 Langfuse trace 结构 + 安全拦截。"""
+class TestSystemScenarios:
+    """系统场景：Langfuse trace 结构与安全拦截。"""
 
     # ──────────────────────────────────────────────────────────────
     # DEMO-01  正常对话的 Langfuse 全链路 trace

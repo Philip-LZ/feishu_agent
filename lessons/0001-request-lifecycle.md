@@ -1,7 +1,7 @@
-# 第一课：系统骨架与一次请求的生命周期
+# 系统骨架与一次请求的生命周期
 
 > **预计时间：** 20 分钟  
-> **本课目标：** 看懂 XiaoPaw 的主干，而不是记住所有模块。学完后，你应能画出一条普通消息的路径，并解释每层负责什么。
+> **阅读目标：** 看懂 XiaoPaw 的主干，而不是记住所有模块。学完后，你应能画出一条普通消息的路径，并解释每层负责什么。
 
 ## 1. 先建立一个模型
 
@@ -80,7 +80,7 @@ routing_key B → Queue B → Worker B → 一次处理一条
 - 不同 `routing_key` 可以并行，避免一个慢用户阻塞所有人；
 - 队列有最大长度，满时当前实现记录 warning 并丢弃新消息。
 
-队列细节会在第二课展开。本课只记住：**Runner 决定何时执行，Agent 决定执行什么。**
+队列细节见路由与并发说明。核心职责是：**Runner 决定何时执行，Agent 决定执行什么。**
 
 ## 5. 一条普通消息在 `_handle()` 中经历什么
 
@@ -159,7 +159,7 @@ AgentFn 返回 reply
 
 因此 `finally` 是可靠性设计的一部分：成功、拒绝或异常都必须结束 trace 和 Hook 生命周期。
 
-## 9. 本课速记
+## 9. 要点速记
 
 ```text
 入口适配：Feishu / TestAPI / Cron → InboundMessage
@@ -172,17 +172,17 @@ Agent 边界：Runner → AgentFn → MemoryAwareCrew
 
 ## 10. 小练习
 
-这不是模拟面试，只用于检查课程是否讲清楚。完成时可以看源码。
+以下练习用于检查对实现的理解，可以参考源码。
 
 1. 在 [`main.py`](../xiaopaw/main.py) 找到 `Runner` 构造位置，写出注入给它的四个主要依赖。
 2. 在 [`listener.py`](../xiaopaw/feishu/listener.py) 和 [`test_server.py`](../xiaopaw/api/test_server.py) 各找到一次 `InboundMessage(...)`。
 3. 在 [`runner.py`](../xiaopaw/runner.py) 找到调用 `self._agent_fn(...)` 的位置，并说明调用前后各有哪两类工作。
 4. 用一行话解释：为什么“飞书机器人调用 LLM”不足以描述这个系统？
 
-完成后把答案或不理解的源码行发给我。我会做课程答疑，不进入模拟面试。下一课再专门学习 `routing_key`、队列、并发与背压。
+相关主题：`routing_key`、队列、并发与背压，见[路由与并发说明](0002-routing-queue-concurrency.md)。
 
 ## 延伸阅读
 
 - 仓库设计线索：[`docs/01-architecture.md`](../docs/01-architecture.md)
 - Python 官方资料：[asyncio queues](https://docs.python.org/3/library/asyncio-queue.html)
-- 课程路线：[`reference/0001-course-roadmap.md`](../reference/0001-course-roadmap.md)
+- 阅读路线：[`reference/0001-source-reading-roadmap.md`](../reference/0001-source-reading-roadmap.md)

@@ -1,6 +1,6 @@
 """E2E-11: 5+2 event completeness and structured logging.
 
-Covers: L30 (all 7 events fire, dispatch fault tolerance, structured_log handler)
+Covers: all 7 events fire, dispatch fault tolerance, structured_log handler
 Tier: T4 (LLM + Langfuse)
 """
 

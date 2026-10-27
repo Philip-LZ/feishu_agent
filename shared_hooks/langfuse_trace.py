@@ -1,9 +1,5 @@
 """Langfuse 全链路追踪 —— 把 5+2 Hook 事件翻译为 Langfuse trace 树。
 
-【课程对应】
-- L30《项目实战 3》：建立"看得见"的可观测层
-- L33《项目实战 5》第五节"Trace 树：从事件到完整树形结构"——本文件 5 大机制的完整阐释
-
 【Trace 树的目标层次结构】
     Trace (id = session_id)                ← 机制一：多轮对话同 trace
       └─ root span: session-{sid}
@@ -595,7 +591,7 @@ def after_tool_handler(ctx) -> None:
 def after_turn_handler(ctx) -> None:
     """★ 机制四 + 机制五：关闭最后的 generation/span，强制 flush 到 Langfuse。
 
-    本函数末尾的 _flush_batch() 是 L33 课文"机制五"的关键：
+    本函数末尾通过 _flush_batch() 强制提交观测数据：
     必须在 sender.send(reply) 之前完成，保证用户拿到回复时 Langfuse 数据已就绪。
 
     is_intermediate=True 的 turn 是 step_callback 触发的中间 turn —— 不 flush，

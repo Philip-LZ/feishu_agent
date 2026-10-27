@@ -1,10 +1,5 @@
 """HookLoader: 解析 hooks.yaml + 两层加载 + 策略实例化 + deps 依赖注入。
 
-【课程对应】
-- L30《项目实战 3》：hooks 段加载
-- L32《项目实战 4》：strategies 段 + deps 依赖注入（多策略共享 audit_logger）
-- L33《项目实战 5》第四节"声明顺序就是执行顺序"：本文件强制 hooks 段先于 strategies 段加载
-
 【三段式 YAML 结构】
     hooks:        # 观测层（无状态函数）→ register 后用 dispatch
     strategies:   # 策略层（有状态对象）→ register 后用 dispatch_gate
@@ -14,7 +9,6 @@
 load_from_directory() 严格调用顺序：
     _load_hooks_section() → _load_strategies_section()
 这样即使策略层 deny 阻断了链路，观测 handler 也已经写过 trace/log，攻击行为留有完整证据链。
-（参见 L33 课文"约束一"）
 """
 
 import importlib.util
@@ -40,7 +34,7 @@ class HookLoader:
         """从一个目录加载 hooks.yaml。
 
         【加载顺序硬编码】
-        先 hooks 段后 strategies 段——这是 L33"约束一"的代码级实现。
+        先加载 hooks 段，再加载 strategies 段。
         即使策略层抛 deny，观测 handler 已经执行完，Langfuse 里有完整记录。
         """
         yaml_path = hooks_dir / "hooks.yaml"
@@ -90,7 +84,7 @@ class HookLoader:
     ):
         """加载 strategies 段：实例化策略对象 + 注入依赖 + 注册方法到事件。
 
-        【依赖注入约束（L33 约束二）】
+        【依赖注入约束】
         strategies 是有序列表，按声明顺序逐个实例化。
         当一个策略声明 deps 时，被依赖的策略必须已经在前面实例化完成。
         否则只打 WARNING（fail-open），但运行时调用 self.audit.xxx 会 AttributeError —

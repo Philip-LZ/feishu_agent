@@ -657,7 +657,7 @@ allowed_tools:                            # 【v2 新增】MCP 白名单，task 
 | `search_memory` | `[sandbox_execute_code]` |
 | `history_reader` | — （reference 型，不启 Sub-Crew） |
 
-**教学 Demo 场景**：`enable_mcp_whitelist=false` 时 Sub-Crew 暴露全部 MCP 工具（与 v1 等价），方便学员 demo 探索 `browser_*` 等工具。
+**本地调试场景**：`enable_mcp_whitelist=false` 时 Sub-Crew 暴露全部 MCP 工具（与 v1 等价），方便本地调试 `browser_*` 等工具。
 
 ### 8.4 YAML 解析安全
 
@@ -892,7 +892,7 @@ CREATE POLICY memories_isolation ON memories
 SET LOCAL xiaopaw.current_routing_key = 'p2p:ou_abc123';
 ```
 
-**FeatureFlag 控制**：`enable_pgvector_rls=false` 时教学模式 / 单用户 demo 可关闭（v2 默认关，生产单节点配合 app 层防护即可；多租户部署时必须开）。
+**FeatureFlag 控制**：`enable_pgvector_rls=false` 时开发模式 / 单用户 demo 可关闭（v2 默认关，生产单节点配合 app 层防护即可；多租户部署时必须开）。
 
 ### 10.6 幂等写入
 
@@ -981,7 +981,7 @@ DELETE FROM memories WHERE turn_ts < (EXTRACT(EPOCH FROM NOW()) - 180*86400)*100
 
 ## 11. Workspace 文件
 
-Workspace 是挂载进 AIO-Sandbox 的目录，是 L20 文件记忆层的物理载体。
+Workspace 是挂载进 AIO-Sandbox 的目录，是 文件记忆层的物理载体。
 
 ### 11.1 目录结构
 
@@ -1043,7 +1043,7 @@ volumes:
 - **密钥空时**：`baidu.json` 静默跳过（Skill 不可用但主流程不受影响）
 - **密钥轮换**：运维更新 `.env` → SIGHUP / 重启服务 → `CleanupService` 重写凭证
 
-### 11.4 Memory 文件（L20 文件记忆层）
+### 11.4 Memory 文件（文件记忆层）
 
 | 文件 | 写者 | 读者 | 生命周期 | 大小限制 |
 |------|------|------|---------|---------|
@@ -1124,7 +1124,7 @@ feature_flags:
   enable_trace_id:                 true     # F6：trace 贯穿
 
   # 安全（F7-F10）
-  enable_mcp_whitelist:            true     # F7：T1 MCP 白名单（教学 demo 可关）
+  enable_mcp_whitelist:            true     # F7：T1 MCP 白名单（本地 demo 可关）
   enable_memory_save_filter:       true     # F8：T2/T8 memory-save 投毒过滤
   enable_webhook_replay_cache:     true     # F9：T3 飞书 webhook 重放（v2.1：原 enable_webhook_signature 改名）
   enable_inbound_rate_limit:       true     # F10：T7 入站速率限制
@@ -1148,7 +1148,7 @@ feature_flags:
 ### 12.5 v2 vs v1 差异
 
 - **v1 无 feature_flags 配置节**
-- **v2 新增**：作为"教学 demo ↔ 生产加固"的开关；每个 flag 对应 [ssot/feature-flags.md](ssot/feature-flags.md) 中的 F1-F12
+- **v2 新增**：作为"本地 demo ↔ 生产加固"的开关；每个 flag 对应 [ssot/feature-flags.md](ssot/feature-flags.md) 中的 F1-F12
 - **v2.1 对照（改名）**：`enable_webhook_signature` → `enable_webhook_replay_cache`（v1→v2.0→v2.1 改名对照；从 v2.0 升级时需在 config.yaml 中改名）；`token_counter_mode` 二值 → 三值（新增 `hf_qwen`）；新增 `enable_pgvector_connection_pool`
 
 ---

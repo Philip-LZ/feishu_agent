@@ -1,7 +1,5 @@
 # XiaoPaw v2 — 飞书 AI 工作助手
 
-> 极客时间《企业级多智能体设计实战》课程配套代码。
-> 从第 17 课骨架出发，经历四代演进：能力(L17) → 记忆(L22) → 协作(L29) → 加固(L30-33)。
 
 XiaoPaw 是一个运行在飞书里的 AI 工作助手。你在飞书里发消息给它，它通过两层 Agent 架构理解意图、调用技能、在沙箱里执行代码，然后把结果返回给你。
 
@@ -15,7 +13,6 @@ XiaoPaw 是一个运行在飞书里的 AI 工作助手。你在飞书里发消�
                                                     AIO-Sandbox(Docker/MCP)
 ```
 
-> **本仓与课程的对应关系**：第 33 课《项目实战 5：系统加固》把 30/31/32 课在独立 demo（`crewai_mas_demo/m5l30~32`）里跑通的三层加固，整建制装到 XiaoPaw 上。**业务代码 0 行修改**，靠 `shared_hooks/hooks.yaml` 一份声明把 9 个策略接线启动。本仓即第 33 课交付的"穿上装甲"的 XiaoPaw。
 
 ---
 
@@ -26,7 +23,7 @@ XiaoPaw 是一个运行在飞书里的 AI 工作助手。你在飞书里发消�
 3. [飞书应用配置](#飞书应用配置)
 4. [Langfuse 可观测（推荐）](#langfuse-可观测推荐)
 5. [代码框架说明](#代码框架说明)（每个目录的职责）
-6. [课堂代码演示学习指南](#课堂代码演示学习指南)（按 17→22→29→30→31→32→33 顺序读代码）
+6. [代码阅读指南](#代码阅读指南)
 7. [测试](#测试) · [端口速查](#端口速查) · [技术栈](#技术栈) · [数据本地化披露](#数据本地化披露)
 
 ---
@@ -132,7 +129,7 @@ docker exec feishu_agent-aio-sandbox-1 stat -c "container=%i" /workspace
 
 ### Step 5：启动 pgvector（可选，记忆搜索需要）
 
-如果只是体验基本对话，可以跳过这步。需要第 22 课的"三层记忆"中向量搜索功能时再启动。
+如果只是体验基本对话，可以跳过这步。需要三层记忆中的向量搜索功能时再启动。
 
 ```bash
 # 方式 1：使用已有的 PostgreSQL（需安装 pgvector 扩展）
@@ -229,7 +226,7 @@ curl http://127.0.0.1:9090/api/test/replies?routing_key=p2p:ou_test
 
 ## Langfuse 可观测（推荐）
 
-XiaoPaw 集成了 Langfuse 全链路追踪，可以可视化每次对话的完整调用链（LLM 调用、工具执行、Sub-Crew 流程）。**第 33 课课文里的"Trace 树"截图就是从这里看到的。**
+XiaoPaw 集成了 Langfuse 全链路追踪，可以可视化每次对话的完整调用链（LLM 调用、工具执行、Sub-Crew 流程）。
 
 ```bash
 # Langfuse Cloud 或自托管实例：
@@ -262,35 +259,35 @@ xiaopaw-v2/
 │
 ├── xiaopaw/                      # 主代码（业务层）
 │   ├── main.py                   #   启动入口：装配 listener / runner / 监控端点
-│   ├── runner.py                 #   消息队列 + Agent 调度（33课在这里改了 +4 行接线）
+│   ├── runner.py                 #   消息队列 + Agent 调度
 │   ├── agents/                   #   Main Crew + Sub-Crew 两层 Agent 编排
-│   │   ├── main_crew.py          #     主 Crew（17/22/29 课）
-│   │   └── skill_crew.py         #     Sub-Crew（29 课"零编排协作"）
-│   ├── tools/                    #   SkillLoaderTool（17课渐进式能力披露）
+│   │   ├── main_crew.py          #     主 Crew
+│   │   └── skill_crew.py         #     Sub-Crew（零编排协作）
+│   ├── tools/                    #   SkillLoaderTool（渐进式能力披露）
 │   ├── skills/                   #   13 个技能（baidu_search/web_browse/pdf/docx/...）
-│   ├── hook_framework/           #   ★ 30 课 Hook 骨架（事件分发 + YAML 加载）
+│   ├── hook_framework/           #   ★ Hook 骨架（事件分发 + YAML 加载）
 │   │   ├── registry.py           #     EventType + HookContext + HookRegistry + GuardrailDeny
 │   │   ├── crew_adapter.py       #     CrewAI 回调 → 5+2 事件映射 + pending_deny
 │   │   └── loader.py             #     hooks + strategies + deps 三段式 YAML 加载
-│   ├── memory/                   #   ★ 22 课三层记忆（Bootstrap + 文件 + pgvector）
+│   ├── memory/                   #   ★ 三层记忆（Bootstrap + 文件 + pgvector）
 │   ├── session/                  #   会话管理（routing_key → session 状态）
 │   ├── feishu/                   #   飞书 SDK（WebSocket 监听 + 消息发送）
 │   ├── llm/                      #   LLM 接入（ZHIPU/GLM-5.3-Flash via DashScope）
 │   ├── config/                   #   配置校验（Pydantic）
 │   └── observability/            #   指标 / 日志 / trace
 │
-├── shared_hooks/                 # ★ 加固层（30-33课产出，9 个策略，1337 行，业务 0 行修改）
-│   ├── hooks.yaml                #   33 课新写：两段式声明（72 行，本仓的"装甲接线图"）
-│   ├── structured_log.py         #   30 课：JSON 事件日志（82 行）
-│   ├── langfuse_trace.py         #   30 课：Langfuse 全链路（779 行，含 Trace 树五大机制）
-│   ├── audit_logger.py           #   32 课：JSONL 审计日志（63 行，被 sandbox/permission deps 共享）
-│   ├── sandbox_guard.py          #   32 课：路径穿越/Shell 注入/Prompt 注入消毒（107 行）
-│   ├── permission_gate.py        #   32 课：工具权限三级控制 deny/warn/allow（75 行）
-│   ├── cost_guard.py             #   31 课：$1 成本围栏（69 行）
-│   ├── loop_detector.py          #   31 课：循环检测阈值 3（50 行）
-│   └── retry_tracker.py          #   31 课：重试追踪最多 5 次（40 行）
+├── shared_hooks/                 # ★ 加固层（观测、安全与可靠性策略）
+│   ├── hooks.yaml                #   两段式声明（72 行，本仓的"装甲接线图"）
+│   ├── structured_log.py         #   JSON 事件日志（82 行）
+│   ├── langfuse_trace.py         #   Langfuse 全链路（779 行，含 Trace 树五大机制）
+│   ├── audit_logger.py           #   JSONL 审计日志（63 行，被 sandbox/permission deps 共享）
+│   ├── sandbox_guard.py          #   路径穿越/Shell 注入/Prompt 注入消毒（107 行）
+│   ├── permission_gate.py        #   工具权限三级控制 deny/warn/allow（75 行）
+│   ├── cost_guard.py             #   $1 成本围栏（69 行）
+│   ├── loop_detector.py          #   循环检测阈值 3（50 行）
+│   └── retry_tracker.py          #   重试追踪最多 5 次（40 行）
 │
-├── workspace-init/               # 新用户 workspace 模板（22课记忆四件套：soul/user/agent/memory）
+├── workspace-init/               # 新用户 workspace 模板（记忆四件套：soul/user/agent/memory）
 ├── tests/                        # 单元 + 集成 + E2E 测试（293 用例）
 │   ├── unit/                     #   188 单测（shared_hooks 106 + hook_framework 64 + v3_fixes 18）
 │   ├── integration/              #   40 集成（hook_chain / security_chain / deny_flow）
@@ -298,7 +295,7 @@ xiaopaw-v2/
 │
 └── docs/                         # 设计文档（18 篇 + SSOT 清单）
     ├── 01-architecture.md  02-modules.md  07-security.md  08-deployment.md
-    ├── 12-hook-hardening.md      #   30-33 课 Hook 加固设计总纲（v3.1-rc1）
+    ├── 12-hook-hardening.md      #   Hook 加固设计总纲（v3.1-rc1）
     ├── 13-test-design-hook-hardening.md
     ├── 14-e2e-test-design.md
     ├── 15-e2e-fix-structured-log-and-timing.md
@@ -323,9 +320,9 @@ Main Crew 不知道具体技能实现，只看到技能名称和描述，需要�
 
 ---
 
-## 课堂代码演示学习指南
+## 代码阅读指南
 
-本节按课程教学顺序帮你阅读代码，从 17 课的能力骨架一路读到 33 课的"装甲接线"。**每一步都标注了对应课文章节、要看的文件、和验证方式。**
+本节按能力骨架、记忆、协作、观测、可靠性和安全的顺序介绍代码，并列出相关文件和验证方式。
 
 ### 整体架构一览
 
@@ -337,13 +334,13 @@ Main Crew 不知道具体技能实现，只看到技能名称和描述，需要�
                 └─────────┬─────────┘
                           │
                 ┌─────────▼─────────┐
-                │     Runner        │ ← xiaopaw/runner.py（33课在这里 +4 行接线）
+                │     Runner        │ ← xiaopaw/runner.py
                 │ (消息队列 + 调度)  │
                 └─────────┬─────────┘
                           │
                 ┌─────────▼─────────┐
-                │    Main Crew      │ ← xiaopaw/agents/main_crew.py（17课）
-                │  + 三层记忆        │ ← xiaopaw/memory/（22课）
+                │    Main Crew      │ ← xiaopaw/agents/main_crew.py
+                │  + 三层记忆        │ ← xiaopaw/memory/
                 └─────┬─────────┬───┘
                       │         │
             SkillLoaderTool   step_callback / task_callback
@@ -351,16 +348,16 @@ Main Crew 不知道具体技能实现，只看到技能名称和描述，需要�
         ┌─────────────▼─┐    ┌──▼─────────────────────────┐
         │  Sub-Crew     │    │  CrewObservabilityAdapter   │
         │ (沙箱执行)     │    │  ↓ 翻译为 5+2 事件          │
-        │  29课零编排    │    │  HookRegistry              │ ← 30课 Hook 骨架
+        │  零编排协作   │    │  HookRegistry              │ ← Hook 骨架
         └───────┬───────┘    │  ↓ dispatch / dispatch_gate │
                 │            └──┬──────────────────────────┘
                 │               │
         ┌───────▼───────┐    ┌──▼──────────────────────────┐
-        │  AIO-Sandbox  │    │  hooks.yaml（33课声明）      │
-        │  (MCP/Docker) │    │  ├ 观测层：log + langfuse    │ 30课
-        │  端口 8030    │    │  ├ 安全层：sandbox+permission│ 32课
+        │  AIO-Sandbox  │    │  hooks.yaml（配置）          │
+        │  (MCP/Docker) │    │  ├ 观测层：log + langfuse    │
+        │  端口 8030    │    │  ├ 安全层：sandbox+permission│
         └───────────────┘    │  │           +audit          │
-                             │  └ 可靠性：cost+loop+retry   │ 31课
+                             │  └ 可靠性：cost+loop+retry   │
                              └─────────────────────────────┘
 ```
 
@@ -368,9 +365,8 @@ Main Crew 不知道具体技能实现，只看到技能名称和描述，需要�
 
 ---
 
-#### 第一站｜L17 能力骨架：SkillLoader 是如何"渐进式披露"的
+#### 第一站｜能力骨架：SkillLoader 是如何"渐进式披露"的
 
-**对应课文**：第 17 课《项目实战 1：能力骨架》
 
 **阅读文件**：
 
@@ -390,9 +386,8 @@ pytest tests/unit/agents/test_main_crew.py -v
 
 ---
 
-#### 第二站｜L22 三层记忆：Bootstrap + 文件 + pgvector
+#### 第二站｜三层记忆：Bootstrap + 文件 + pgvector
 
-**对应课文**：第 22 课《项目实战 2：长期记忆》 + `DESIGN.md` 的"记忆"章节
 
 **阅读文件**：
 
@@ -420,9 +415,8 @@ pytest tests/integration/memory/ -v -m pgvector_required
 
 ---
 
-#### 第三站｜L29 零编排协作：Sub-Crew 如何接续上下文
+#### 第三站｜零编排协作：Sub-Crew 如何接续上下文
 
-**对应课文**：第 29 课《零编排架构》
 
 **阅读文件**：
 
@@ -432,7 +426,7 @@ pytest tests/integration/memory/ -v -m pgvector_required
 | `xiaopaw/tools/skill_loader.py` | 父 Crew 怎么把 routing_key / session_id / parent_span 透传给 Sub-Crew |
 | `docs/01-architecture.md` 第 4 节 | 四接缝（输入 / 工具 / 输出 / 记忆）和六阶段端到端流程 |
 
-**理解要点**：Sub-Crew **运行在 ThreadPoolExecutor 的子线程**。这个细节在 33 课"Trace 树机制二"里至关重要：靠 `copy_context()` 把 ContextVar 拷过去，trace 父子关系才能自动建立。
+**理解要点**：Sub-Crew **运行在 ThreadPoolExecutor 的子线程**。建立 trace 父子关系时，靠 `copy_context()` 把 ContextVar 拷过去，trace 父子关系才能自动建立。
 
 **验证**：
 ```bash
@@ -442,9 +436,8 @@ pytest tests/e2e/test_e2e_05_search.py -v   # 调用 baidu_search → Sub-Crew �
 
 ---
 
-#### 第四站｜L30 Hook 骨架：HookRegistry 的两套分发机制
+#### 第四站｜Hook 骨架：HookRegistry 的两套分发机制
 
-**对应课文**：第 33 课"三、核心架构：HookRegistry 的两套机制"（设计源自第 30 课）
 
 **阅读文件**：`xiaopaw/hook_framework/registry.py`
 
@@ -468,15 +461,14 @@ pytest tests/unit/hook_framework/ -v   # 64 个单元测试
 
 ---
 
-#### 第五站｜L30 观测层：Langfuse Trace 树的五个机制
+#### 第五站｜观测层：Langfuse Trace 树的五个机制
 
-**对应课文**：第 33 课"五、Trace 树：从事件到完整树形结构"
 
 **阅读文件**：`shared_hooks/langfuse_trace.py`（779 行，是整个仓库最复杂的单文件，但也是含金量最高的）
 
-按课文五个机制读：
+按以下五个机制阅读：
 
-| 课文机制 | 代码区域 | 看什么 |
+| 机制 | 代码区域 | 看什么 |
 |---------|---------|--------|
 | **机制一**：多轮对话留在同一棵树 | `_get_trace_id()` | `trace_id = session_id`，利用 Langfuse 的 upsert 语义 |
 | **机制二**：Sub-crew 自动挂到父 trace | `subcrew_setup()` / `subcrew_cleanup()` | `copy_context()` 复制 ContextVar 到子线程；不在子线程里重置变量 |
@@ -496,9 +488,8 @@ pytest tests/e2e/test_e2e_03_trace_completeness.py -v
 
 ---
 
-#### 第六站｜L31 可靠性策略：cost / loop / retry
+#### 第六站｜可靠性策略：cost / loop / retry
 
-**对应课文**：第 31 课《项目实战 3：dispatch_gate + pending_deny + 双路径 + 三策略》
 
 **阅读文件**：
 
@@ -515,9 +506,8 @@ pytest tests/unit/shared_hooks/test_cost_guard.py tests/unit/shared_hooks/test_l
 
 ---
 
-#### 第七站｜L32 安全层：sandbox / permission / audit + deps 共享
+#### 第七站｜安全层：sandbox / permission / audit + deps 共享
 
-**对应课文**：第 32 课《项目实战 4：三层安全——沙箱 + 权限网关 + 身份认证》
 
 **阅读文件**：
 
@@ -538,13 +528,12 @@ pytest tests/unit/shared_hooks/test_sandbox_guard.py \
 
 ---
 
-#### 第八站｜L33 接线启动：读懂 hooks.yaml 的三条执行顺序约束 ★★★
+#### 第八站｜接线启动：读懂 hooks.yaml 的三条执行顺序约束 ★★★
 
-**对应课文**：第 33 课全篇——这是本仓库的"封顶仪式"
 
 **阅读文件**：`shared_hooks/hooks.yaml`（72 行，是全仓库信息密度最高的文件）
 
-打开 `hooks.yaml`，对照课文第四节"声明顺序就是执行顺序"，逐条核对：
+打开 `hooks.yaml`，逐条核对声明顺序与执行顺序：
 
 **约束一：观测段必须整体先于策略段**
 
@@ -572,7 +561,7 @@ strategies:
     deps: { audit: audit_logger }
 ```
 
-不按这个顺序的后果（课文 4.2）：`SandboxGuard.__init__(audit=None)`，运行时 `AttributeError`，而 `fail_closed=True` 会把所有请求都拒掉——系统完全瘫痪。
+不按这个顺序的后果：`SandboxGuard.__init__(audit=None)`，运行时 `AttributeError`，而 `fail_closed=True` 会把所有请求都拒掉——系统完全瘫痪。
 
 **约束三：cost_guard 必须先于 loop_detector（AFTER_TURN）**
 
@@ -586,7 +575,7 @@ strategies:
 
 不按这个顺序的后果：循环场景是高消耗场景，但 loop_detector 先 deny 会让 cost_guard 永远算不到账，预算严重偏低。
 
-**33 课的接线点**：
+**Hook 接线点**：
 
 | 文件 | 改动 | 看什么 |
 |------|------|--------|
@@ -619,7 +608,7 @@ pytest tests/e2e/ -v
 - [ ] **如果把 `audit_logger` 移到 `sandbox_guard` 后面，系统会发生什么？为什么 HookLoader 的 WARNING 不足以提醒你？**
 - [ ] 为什么 `cost_guard` 必须在 `loop_detector` 之前？
 - [ ] 为什么 `_flush_batch()` 必须在 `sender.send()` 之前？
-- [ ] **L33 改了业务代码 0 行，靠什么实现的？请用一句话向同事解释。**
+- [ ] **Hook 框架如何通过配置接入观测与安全策略？**
 
 ---
 
@@ -655,7 +644,7 @@ ruff check .
 
 ---
 
-## 常见坑 FAQ（学员最容易踩）
+## 常见问题 FAQ
 
 > 这几个坑都跟"看似成功，实际坏掉"或"5分钟挂死无报错"有关。先记住症状，遇到时直接对号入座。
 
@@ -709,7 +698,7 @@ docker compose -f sandbox-docker-compose.yaml restart           # 不一致就�
 
 ### 4. 怎么读 Langfuse trace 时不要被假成功骗
 
-学员看 trace 树时，**根 span output ≠ 内部全部成功**。Trace 显示 "好的已记住" 不代表真的写到 user.md。
+查看 trace 树时，**根 span output ≠ 内部全部成功**。Trace 显示 "好的已记住" 不代表真的写到 user.md。
 
 **正确读法**：
 - 检查 root span `name`、`source: xiaopaw-v2`、tree 结构
@@ -731,17 +720,17 @@ docker compose -f sandbox-docker-compose.yaml restart           # 不一致就�
 
 ---
 
-## 课程导航（速查表）
+## 模块导航（速查表）
 
-| 课程 | 主题 | 关注代码 | 关键设计文档 |
-|------|------|---------|------------|
-| 第 17 课 | 能力骨架 | `xiaopaw/runner.py` + `xiaopaw/agents/` + `xiaopaw/tools/skill_loader.py` | — |
-| 第 22 课 | 三层记忆 | `xiaopaw/memory/` + `workspace-init/` | `DESIGN.md` |
-| 第 29 课 | 零编排协作 | `xiaopaw/agents/skill_crew.py` | `docs/01-architecture.md` 第 4 节 |
-| 第 30 课 | Hook 骨架 + 可观测 | `xiaopaw/hook_framework/` + `shared_hooks/structured_log.py` + `shared_hooks/langfuse_trace.py` | `docs/12-hook-hardening.md` |
-| 第 31 课 | 可靠性策略 | `shared_hooks/{cost_guard,loop_detector,retry_tracker}.py` | `docs/12-hook-hardening.md` |
-| 第 32 课 | 安全策略 | `shared_hooks/{sandbox_guard,permission_gate,audit_logger}.py` | `docs/07-security.md` |
-| **第 33 课** | **系统加固接线** | **`shared_hooks/hooks.yaml` + `xiaopaw/runner.py`（+4 行）** | **`docs/12-hook-hardening.md` v3.1-rc1** |
+| 主题 | 关注代码 | 关键设计文档 |
+|------|---------|------------|
+| 能力骨架 | `xiaopaw/runner.py` + `xiaopaw/agents/` + `xiaopaw/tools/skill_loader.py` | — |
+| 三层记忆 | `xiaopaw/memory/` + `workspace-init/` | `DESIGN.md` |
+| 零编排协作 | `xiaopaw/agents/skill_crew.py` | `docs/01-architecture.md` 第 4 节 |
+| Hook 骨架 + 可观测 | `xiaopaw/hook_framework/` + `shared_hooks/structured_log.py` + `shared_hooks/langfuse_trace.py` | `docs/12-hook-hardening.md` |
+| 可靠性策略 | `shared_hooks/{cost_guard,loop_detector,retry_tracker}.py` | `docs/12-hook-hardening.md` |
+| 安全策略 | `shared_hooks/{sandbox_guard,permission_gate,audit_logger}.py` | `docs/07-security.md` |
+| **系统加固接线** | **`shared_hooks/hooks.yaml` + `xiaopaw/runner.py`（+4 行）** | **`docs/12-hook-hardening.md` v3.1-rc1** |
 
 完整设计文档列表：
 
@@ -790,4 +779,4 @@ XiaoPaw 在处理消息时，会将对话内容发送到以下外部服务：
 
 ## License
 
-与原课程示例保持一致。
+仓库尚未提供独立的许可证文件。
